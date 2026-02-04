@@ -386,13 +386,14 @@ public:
      * @lua NA
      */
     void onExit() override;
-
-protected:
+    
     /** Sets the Sprite being used.
      *
      * @param sprite A Sprite.
      */
     void setSprite(Sprite* sprite);
+
+protected:
 
     virtual void
     beginWithClear(float r, float g, float b, float a, float depthValue, int stencilValue, ClearFlag flags);
