@@ -377,3 +377,6 @@ It should work same as apples CFSwapInt32LittleToHost(..)
 #define AX_CALLBACK_3(__selector__, __target__, ...)                                                          \
     std::bind(&__selector__, __target__, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, \
               ##__VA_ARGS__)
+#define AX_CALLBACK_4(__selector__, __target__, ...) \
+std::bind(&__selector__, __target__, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, \
+         std::placeholders::_4, ##__VA_ARGS__)

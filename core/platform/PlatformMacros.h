@@ -473,3 +473,10 @@ public:                                                 \
 #    define AX_NOUNROLL _Pragma("nounroll")
 #endif
 
+
+#define NS_AX_BEGIN                     namespace ax {
+#define NS_AX_END                       }
+#define USING_NS_CC                     using namespace ax
+#define NS_CC                           ::ax
+
+#define AX_DEPRECATED_ATTRIBUTE __attribute__((deprecated))

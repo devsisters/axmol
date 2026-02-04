@@ -80,6 +80,8 @@ namespace cocos2d = ax;
 #define CC_CALLBACK_0                AX_CALLBACK_0
 #define CC_CALLBACK_1                AX_CALLBACK_1
 #define CC_CALLBACK_2                AX_CALLBACK_2
+#define CC_CALLBACK_3                AX_CALLBACK_3
+#define CC_CALLBACK_4                AX_CALLBACK_4
 
 #define CC_SCHEDULE_SELECTOR         AX_SCHEDULE_SELECTOR
 
