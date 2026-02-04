@@ -791,6 +791,13 @@ public:
      *  @return Returns a pointer to the file stream
      */
     virtual std::unique_ptr<IFileStream> openFileStream(std::string_view filePath, IFileStream::Mode mode) const;
+    
+    /** full-path-searching 속도가 너무 느려 모든 파일을 미리 캐싱해두기 위해 사용 */
+    void setFullPathCache(hlookup::string_map<std::string> cache) { _fullPathCache = std::move(cache); }
+    void removeFullPathCacheForFilename(const std::string& filename) { _fullPathCache.erase(filename); }
+    
+    // 번들 파일 CRP
+    TarBundleFile* getBundlePack() const{ return _crp; }
 
 protected:
     /**
