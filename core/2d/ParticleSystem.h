@@ -407,6 +407,9 @@ public:
 
         /** The simulation's framerate is set to the animation interval specified in director. */
         SIMULATION_USE_GAME_ANIMATION_INTERVAL = -1,
+        
+        /** The starting spin of the particle is equal to the ending spin. */
+        START_SPIN_EQUAL_TO_END_SPIN = -1,
     };
 
     /** Creates an initializes a ParticleSystem from a plist file.

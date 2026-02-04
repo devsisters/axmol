@@ -70,6 +70,7 @@ set(_AX_2D_HEADER
   2d/SpriteSheetLoader.h
   2d/PlistSpriteSheetLoader.h
   2d/ActionCoroutine.h
+  2d/ParticleSystemEx.h
 )
 
 set(_AX_2D_SRC
@@ -145,4 +146,5 @@ set(_AX_2D_SRC
   2d/SpriteSheetLoader.cpp
   2d/PlistSpriteSheetLoader.cpp
   2d/ActionCoroutine.cpp
+  2d/ParticleSystemEx.cpp
 )
