@@ -81,7 +81,10 @@ bool SpriteFrameCache::init()
     return true;
 }
 
-SpriteFrameCache::~SpriteFrameCache() {}
+SpriteFrameCache::~SpriteFrameCache()
+{
+    AX_SAFE_RELEASE_NULL(_defaultFrame);
+}
 
 void SpriteFrameCache::addSpriteFramesWithFile(std::string_view spriteSheetFileName,
                                                std::string_view textureFileName,
@@ -277,14 +280,60 @@ void SpriteFrameCache::removeSpriteFramesFromTexture(Texture2D* texture)
     eraseFrames(keysToRemove);
 }
 
-SpriteFrame* SpriteFrameCache::getSpriteFrameByName(std::string_view name)
+    // Nakhyun, Devsisters: Frame이 없으면 _frameAdder를 이용해서 불러오도록 수정
+SpriteFrame* SpriteFrameCache::getSpriteFrameByName(std::string_view name, const bool autoAdd, const bool useDefaultFrame, const bool logError)
 {
-    auto* frame = findFrame(name);
-    if (!frame)
+    auto get = [this, name]() -> SpriteFrame*
     {
-        AXLOGD("axmol: SpriteFrameCache: Frame '{}' isn't found", name);
+        return findFrame(name);
+    };
+    auto wrapDefaultFrame = [this, name, useDefaultFrame, logError](SpriteFrame* frame) -> SpriteFrame*
+    {
+        if (frame)
+        {
+            return frame;
+        }
+        if (logError)
+        {
+            AXLOG("cocos2d: SpriteFrameCache: Frame '%s' isn't found", std::string(name).c_str());
+        }
+        if (!useDefaultFrame)
+        {
+            return nullptr;
+        }
+        return _defaultFrame;
+    };
+
+    if (name.length() == 0)
+    {
+        return ax::SpriteFrame::createWithTexture(nullptr, ax::Rect(0, 0, 0, 0));
     }
-    return frame;
+    auto frame = get();
+    if (frame)
+    {
+        return frame;
+    }
+    if (!autoAdd || !_frameAdder)
+    {
+        return wrapDefaultFrame(nullptr);
+    }
+    // CCLOG("cocos2d: SpriteFrameCache: Trying to add frame '%s'.", name.c_str());
+    _frameAdder(name);
+    return wrapDefaultFrame(get());
+}
+    
+std::vector<SpriteFrame*> SpriteFrameCache::getSpriteFramesByTexture(Texture2D* texture)
+{
+    std::vector<SpriteFrame*> frames;
+    for (auto& iter : _spriteFrames)
+    {
+        SpriteFrame* frame = iter.second;
+        if (frame && (frame->getTexture() == texture))
+        {
+            frames.push_back(frame);
+        }
+    }
+    return frames;
 }
 
 bool SpriteFrameCache::reloadTexture(std::string_view spriteSheetFileName)
@@ -466,6 +515,16 @@ std::shared_ptr<SpriteSheet> SpriteFrameCache::getSpriteSheet(std::string_view f
         return it->second;
 
     return nullptr;
+}
+    
+void SpriteFrameCache::setDefaultFrame(SpriteFrame* frame)
+{
+    AX_SAFE_RELEASE_NULL(_defaultFrame);
+    if (frame)
+    {
+        frame->retain();
+        _defaultFrame = frame;
+    }
 }
 
 }  // namespace ax

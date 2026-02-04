@@ -230,8 +230,10 @@ public:
      * @param name A certain sprite frame name.
      * @return The sprite frame.
      */
-    SpriteFrame* getSpriteFrameByName(std::string_view name);
-
+    SpriteFrame* getSpriteFrameByName(std::string_view name, const bool autoAdd=true, const bool useDefaultFrame=true, const bool logError=true);
+    
+    std::vector<SpriteFrame*> getSpriteFramesByTexture(Texture2D* texture);
+    
     bool reloadTexture(std::string_view spriteSheetFileName);
 
     SpriteFrame* findFrame(std::string_view frame);
@@ -260,6 +262,10 @@ public:
 #ifndef _AX_GEN_SCRIPT_BINDINGS
     std::shared_ptr<SpriteSheet> getSpriteSheet(std::string_view spriteSheetFileName);
 #endif
+    
+    void setFrameAdder(std::function<void(std::string_view)> adder) { _frameAdder = adder; }
+    void removeUnusedPlists();
+    void setDefaultFrame(SpriteFrame* frame);
 
 protected:
     // MARMALADE: Made this protected not private, as deriving from this class is pretty useful
@@ -308,6 +314,8 @@ private:
     tsl::robin_map<uint64_t, std::shared_ptr<SpriteSheet>> _spriteFrameToSpriteSheetMap;
 
     std::map<uint32_t, std::shared_ptr<ISpriteSheetLoader>> _spriteSheetLoaders;
+    std::function<void(std::string_view)> _frameAdder;
+    SpriteFrame* _defaultFrame = nullptr;
 };
 
 // end of _2d group
