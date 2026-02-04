@@ -230,6 +230,7 @@ protected:
     AX_PROPERTY(bool, _zoomOnTouchDown, ZoomOnTouchDown);
     /** Scale ratio button on touchdown. Default value 1.1f */
     AX_SYNTHESIZE(float, _scaleRatio, ScaleRatio);
+    AX_PROPERTY(Vec2, _initialScale, InitialScale);
 
     AX_PROPERTY_PASS_BY_REF(Vec2, _labelAnchorPoint, LabelAnchorPoint);
 
@@ -246,6 +247,11 @@ protected:
 
 private:
     AX_DISALLOW_COPY_AND_ASSIGN(ControlButton);
+    
+    AX_SYNTHESIZE(bool, _isMultiTouchSupport, MultiTouchSupport);
+    static std::vector<ControlButton*> _buttonOnRoots;
+    virtual void onEnter() override;
+    virtual void onExit() override;
 };
 
 // end of GUI group

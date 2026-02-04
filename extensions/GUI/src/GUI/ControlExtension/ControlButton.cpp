@@ -51,6 +51,7 @@ ControlButton::ControlButton()
     , _zoomOnTouchDown(false)
     , _marginV(ControlButtonMarginTB)
     , _marginH(ControlButtonMarginLR)
+    , _isMultiTouchSupport(false)
 {}
 
 ControlButton::~ControlButton()
@@ -88,6 +89,7 @@ bool ControlButton::initWithLabelAndBackgroundSprite(Node* node,
         // Zooming button by default
         _zoomOnTouchDown = true;
         _scaleRatio      = 1.1f;
+        _initialScale = { 1, 1 };
 
         // Set the default anchor point
         setIgnoreAnchorPointForPosition(false);
@@ -211,8 +213,15 @@ void ControlButton::setHighlighted(bool enabled)
     needsLayout();
     if (_zoomOnTouchDown)
     {
-        float scaleValue   = (isHighlighted() && isEnabled() && !isSelected()) ? _scaleRatio : 1.0f;
-        Action* zoomAction = ScaleTo::create(0.05f, scaleValue);
+        Action* zoomAction;
+        if (isHighlighted() && isEnabled() && !isSelected())
+        {
+            zoomAction = ScaleTo::create(0.05f, _scaleRatio);
+        }
+        else
+        {
+            zoomAction = ScaleTo::create(0.05f, _initialScale.x, _initialScale.y);
+        }
         zoomAction->setTag(kZoomActionTag);
         runAction(zoomAction);
     }
@@ -226,6 +235,16 @@ void ControlButton::setZoomOnTouchDown(bool zoomOnTouchDown)
 bool ControlButton::getZoomOnTouchDown() const
 {
     return _zoomOnTouchDown;
+}
+
+Vec2 ControlButton::getInitialScale() const
+{
+    return _initialScale;
+}
+
+void ControlButton::setInitialScale(Vec2 var)
+{
+    _initialScale = var;
 }
 
 void ControlButton::setPreferredSize(const Size& size)
@@ -611,6 +630,14 @@ bool ControlButton::onTouchBegan(Touch* pTouch, Event* /*pEvent*/)
             return false;
         }
     }
+    
+    for (auto btn : _buttonOnRoots)
+    {
+        if (btn->_isPushed && !_isMultiTouchSupport)
+        {
+            return false;
+        }
+    }
 
     _isPushed = true;
     this->setHighlighted(true);
@@ -742,6 +769,36 @@ ControlButton* ControlButton::create()
     }
     AX_SAFE_DELETE(pControlButton);
     return nullptr;
+}
+
+/// multi touch suppport
+std::vector<ControlButton*> ControlButton::_buttonOnRoots;
+
+void ControlButton::onEnter()
+{
+    Node::onEnter();
+    auto it = std::find(_buttonOnRoots.begin(), _buttonOnRoots.end(), this);
+    if (it == _buttonOnRoots.end())
+    {
+        _buttonOnRoots.push_back(this);
+    }
+}
+
+void ControlButton::onExit()
+{
+    Node::onExit();
+    _isPushed = false;
+    for (auto it = _buttonOnRoots.begin(); it!= _buttonOnRoots.end();)
+    {
+        if ((*it) == this)
+        {
+            it = _buttonOnRoots.erase(it);
+        }
+        else
+        {
+            it++;
+        }
+    }
 }
 
 NS_AX_EXT_END
