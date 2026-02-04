@@ -63,6 +63,8 @@ typedef struct _ttfConfig
     bool bold;
     bool underline;
     bool strikethrough;
+    
+    std::vector<std::string> fallbackFontFilePaths;
 
     _ttfConfig(std::string_view filePath              = {},
                float size                             = AX_DEFAULT_FONT_LABEL_SIZE,
@@ -73,7 +75,8 @@ typedef struct _ttfConfig
                bool useItalics                        = false,
                bool useBold                           = false,
                bool useUnderline                      = false,
-               bool useStrikethrough                  = false)
+               bool useStrikethrough                  = false,
+               const std::vector<std::string>& fallbackFilePaths = {})
         : fontFilePath(filePath)
         , fontSize(size)
         , faceSize(FontFreeType::DEFAULT_BASE_FONT_SIZE)
@@ -85,6 +88,7 @@ typedef struct _ttfConfig
         , bold(useBold)
         , underline(useUnderline)
         , strikethrough(useStrikethrough)
+        , fallbackFontFilePaths(fallbackFilePaths)
     {
     }
 } TTFConfig;
