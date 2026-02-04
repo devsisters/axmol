@@ -34,6 +34,7 @@ THE SOFTWARE.
 #include "base/Data.h"
 #include "base/Macros.h"
 #include "base/Director.h"
+#include "base/TarBundleUtils.h"
 #include "platform/SAXParser.h"
 #include "platform/FileStream.h"
 
@@ -479,9 +480,19 @@ void FileUtils::setDelegate(FileUtils* delegate)
 std::string FileUtils::s_exeDir;
 #endif
 
-FileUtils::FileUtils() : _writablePath() {}
+FileUtils::FileUtils() : _writablePath()
+{
+    _crp = new TarBundleFile();
+}
 
-FileUtils::~FileUtils() {}
+FileUtils::~FileUtils()
+{
+    if (_crp)
+    {
+        delete _crp;
+        _crp = nullptr;
+    }
+}
 
 bool FileUtils::writeStringToFile(std::string_view dataStr, std::string_view fullPath) const
 {
@@ -533,6 +544,7 @@ bool FileUtils::writeBinaryToFile(const void* data, size_t dataSize, std::string
 
 bool FileUtils::init()
 {
+    _crp->load();
     _searchPathArray.emplace_back(_defaultResRootPath);
     return true;
 }
@@ -583,6 +595,15 @@ FileUtils::Status FileUtils::getContents(std::string_view filename, ResizableBuf
     auto fileUtils = FileUtils::getInstance();
 
     const auto fullPath = fileUtils->fullPathForFilename(filename);
+    /// if ".crp"
+    if (TarBundleFile::isCRPPath(fullPath))
+    {
+        auto crpIt = fullPath.rfind(".crp/");
+        if (_crp->getFileData(fullPath.substr(crpIt+5), buffer, fullPath.substr(0, crpIt+4)))
+        {
+            return Status::OK;
+        }
+    }
 
     FileStream fileStream;
     fileStream.open(fullPath, IFileStream::Mode::READ);

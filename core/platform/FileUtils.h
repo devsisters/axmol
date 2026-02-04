@@ -51,6 +51,8 @@ namespace ax
  * @addtogroup platform
  * @{
  */
+    
+class TarBundleFile;//cookie run ovenbreak resource pack : crp
 
 class ResizableBuffer
 {
@@ -900,6 +902,8 @@ protected:
 
         Director::getInstance()->getJobSystem()->enqueue(std::move(lambda));
     }
+    
+    TarBundleFile* _crp = nullptr;
 };
 
 // end of support group
