@@ -29,7 +29,7 @@ THE SOFTWARE.
 
 #pragma once
 
-#include "axmolver.h"
+//#include "axmolver.h"
 
 //
 // all axmol include files
