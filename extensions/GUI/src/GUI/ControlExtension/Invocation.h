@@ -54,19 +54,19 @@ public:
     /**
      * @lua NA
      */
-    static Invocation* create(Object* target, Control::Handler action, Control::EventType controlEvent);
+    static Invocation* create(Control::Handler handler, Control::EventType controlEvent, const std::string& key = "");
     /**
      * @lua NA
      */
-    Invocation(Object* target, Control::Handler action, Control::EventType controlEvent);
+    Invocation(Control::Handler handler, Control::EventType controlEvent, const std::string& key = "");
     /**
      * @lua NA
      */
     void invoke(Object* sender);
 
 protected:
-    AX_SYNTHESIZE_READONLY(Control::Handler, _action, Action);
-    AX_SYNTHESIZE_READONLY(Object*, _target, Target);
+    AX_SYNTHESIZE_READONLY(Control::Handler, _handler, Handler);
+    AX_SYNTHESIZE_READONLY(std::string, _key, Key);
     AX_SYNTHESIZE_READONLY(Control::EventType, _controlEvent, ControlEvent);
 };
 

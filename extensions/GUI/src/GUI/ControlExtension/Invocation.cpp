@@ -30,25 +30,28 @@
 
 NS_AX_EXT_BEGIN
 
-Invocation* Invocation::create(Object* target, Control::Handler action, Control::EventType controlEvent)
+Invocation* Invocation::create(Control::Handler handler, Control::EventType controlEvent, const std::string& key /*= ""*/)
 {
-    Invocation* pRet = new Invocation(target, action, controlEvent);
-    pRet->autorelease();
+    Invocation* pRet = new (std::nothrow) Invocation(handler, controlEvent, key);
+    if (pRet != nullptr)
+    {
+        pRet->autorelease();
+    }
     return pRet;
 }
 
-Invocation::Invocation(Object* target, Control::Handler action, Control::EventType controlEvent)
+Invocation::Invocation(Control::Handler handler, Control::EventType controlEvent, const std::string& key /*= ""*/)
 {
-    _target       = target;
-    _action       = action;
+    _handler = handler;
+    _key = key;
     _controlEvent = controlEvent;
 }
 
 void Invocation::invoke(Object* sender)
 {
-    if (_target && _action)
+    if(_handler)
     {
-        (_target->*_action)(sender, _controlEvent);
+        _handler(sender, _controlEvent);
     }
 }
 

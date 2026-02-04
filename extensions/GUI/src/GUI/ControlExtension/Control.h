@@ -79,8 +79,9 @@ public:
         VALUE_CHANGED = 1 << 8   // A touch dragging or otherwise manipulating a control, causing it to emit a series of
                                  // different values.
     };
-
-    typedef void (Object::*Handler)(Object*, EventType);
+    
+    using Handler = std::function<void(Object*, EventType)>;
+    using MenuHandler = std::function<void(Object*)>;
 
     /** The possible state for a control.  */
     enum class State
@@ -126,33 +127,30 @@ public:
     virtual void sendActionsForControlEvents(EventType controlEvents);
 
     /**
-     * Adds a target and action for a particular event (or events) to an internal
+     * Adds a handler function for a particular event (or events) to an internal
      * dispatch table.
-     * The action message may optionally include the sender and the event as
+     * The handler message may optionally include the sender and the event as
      * parameters, in that order.
-     * When you call this method, target is not retained.
      *
-     * @param target The target object that is, the object to which the action
-     * message is sent. It cannot be nil. The target is not retained.
-     * @param action A selector identifying an action message. It cannot be NULL.
+     * @param Handler The function that will receive a message.
      * @param controlEvents A bitmask specifying the control events for which the
-     * action message is sent. See "CCControlEvent" for bitmask constants.
+     * handler message is sent. See "CCControlEvent" for bitmask constants.
+     * @param key An unique identifier for the handler.
      */
-    virtual void addTargetWithActionForControlEvents(Object* target, Handler action, EventType controlEvents);
-
+    virtual void addHandlerForControlEvents(Handler handler, EventType controlEvents, const std::string& key = "");
+    virtual void addHandlerForControlEvents(MenuHandler handler, EventType controlEvents, const std::string& key = "");
+    
     /**
-     * Removes a target and action for a particular event (or events) from an
+     * Removes a handler function for a particular event (or events) from an
      * internal dispatch table.
      *
-     * @param target The target object that is, the object to which the action
-     * message is sent. Pass nil to remove all targets paired with action and the
-     * specified control events.
-     * @param action A selector identifying an action message. Pass NULL to remove
-     * all action messages paired with target.
+     * @param key To identify the handler. If no key was set when it was added,
+     * then there is no way to delete the specific handler. Pass an empty string
+     * to remove all handlers paired with the specified control events.
      * @param controlEvents A bitmask specifying the control events associated with
-     * target and action. See "CCControlEvent" for bitmask constants.
+     * handler. See "CCControlEvent" for bitmask constants.
      */
-    virtual void removeTargetWithActionForControlEvents(Object* target, Handler action, EventType controlEvents);
+    virtual void removeHandlerForControlEvents(const std::string& key, EventType controlEvents);
 
     /**
      * Returns a point corresponding to the touch location converted into the
@@ -218,34 +216,30 @@ protected:
     Vector<Invocation*>& dispatchListforControlEvent(EventType controlEvent);
 
     /**
-     * Adds a target and action for a particular event to an internal dispatch
+     * Adds a handler function for a particular event to an internal dispatch
      * table.
-     * The action message may optionally include the sender and the event as
+     * The handler message may optionally include the sender and the event as
      * parameters, in that order.
-     * When you call this method, target is not retained.
      *
-     * @param target The target object that is, the object to which the action
-     * message is sent. It cannot be nil. The target is not retained.
-     * @param action A selector identifying an action message. It cannot be NULL.
-     * @param controlEvent A control event for which the action message is sent.
-     * See "CCControlEvent" for constants.
+     * @param Handler The function that will receive a message.
+     * @param controlEvents A bitmask specifying the control events for which the
+     * handler message is sent. See "CCControlEvent" for bitmask constants.
+     * @param key An unique identifier for the handler.
      */
-    void addTargetWithActionForControlEvent(Object* target, Handler action, EventType controlEvent);
-
+    void addHandlerForControlEvent(Handler Handler, EventType controlEvents, const std::string& key = "");
+    
     /**
-     * Removes a target and action for a particular event from an internal dispatch
+     * Removes a handler function for a particular event from an internal dispatch
      * table.
      *
-     * @param target The target object that is, the object to which the action
-     * message is sent. Pass nil to remove all targets paired with action and the
-     * specified control events.
-     * @param action A selector identifying an action message. Pass NULL to remove
-     * all action messages paired with target.
-     * @param controlEvent A control event for which the action message is sent.
-     * See "CCControlEvent" for constants.
+     * @param key To identify the handler. If no key was set when it was added,
+     * then there is no way to delete the specific handler. Pass an empty string
+     * to remove all handlers paired with the specified control events.
+     * @param controlEvents A bitmask specifying the control events associated with
+     * handler. See "CCControlEvent" for bitmask constants.
      */
-    void removeTargetWithActionForControlEvent(Object* target, Handler action, EventType controlEvent);
-
+    void removeHandlerForControlEvent(const std::string& key, EventType controlEvent);
+    
     bool _enabled;
     bool _selected;
     bool _highlighted;

@@ -128,7 +128,8 @@ void Control::sendActionsForControlEvents(EventType controlEvents)
     }
     release();
 }
-void Control::addTargetWithActionForControlEvents(Object* target, Handler action, EventType controlEvents)
+
+void Control::addHandlerForControlEvents(Handler handler, EventType controlEvents, const std::string& key /*= ""*/)
 {
     // For each control events
     for (int i = 0; i < kControlEventTotalNumber; i++)
@@ -136,90 +137,71 @@ void Control::addTargetWithActionForControlEvents(Object* target, Handler action
         // If the given controlEvents bitmask contains the current event
         if (((int)controlEvents & (1 << i)))
         {
-            this->addTargetWithActionForControlEvent(target, action, (EventType)(1 << i));
+            this->addHandlerForControlEvent(handler, (EventType)(1<<i), key);
         }
     }
 }
 
-/**
- * Adds a target and action for a particular event to an internal dispatch
- * table.
- * The action message may optionally include the sender and the event as
- * parameters, in that order.
- * When you call this method, target is not retained.
- *
- * @param target The target object that is, the object to which the action
- * message is sent. It cannot be nil. The target is not retained.
- * @param action A selector identifying an action message. It cannot be nullptr.
- * @param controlEvent A control event for which the action message is sent.
- * See "CCControlEvent" for constants.
- */
-void Control::addTargetWithActionForControlEvent(Object* target, Handler action, EventType controlEvent)
+void Control::addHandlerForControlEvents(MenuHandler handler, EventType controlEvents, const std::string& key /*= ""*/)
+{
+    addHandlerForControlEvents([handler](Object* pRef, EventType){ handler(pRef); }, controlEvents, key);
+}
+
+void Control::addHandlerForControlEvent(Handler handler, EventType controlEvent, const std::string& key /*= ""*/)
 {
     // Create the invocation object
-    Invocation* invocation = Invocation::create(target, action, controlEvent);
+    Invocation *invocation = Invocation::create(handler, controlEvent, key);
 
     // Add the invocation into the dispatch list for the given control event
     auto& eventInvocationList = this->dispatchListforControlEvent(controlEvent);
     eventInvocationList.pushBack(invocation);
 }
 
-void Control::removeTargetWithActionForControlEvents(Object* target, Handler action, EventType controlEvents)
+void Control::removeHandlerForControlEvents(const std::string& key, EventType controlEvents)
 {
-    // For each control events
+     // For each control events
     for (int i = 0; i < kControlEventTotalNumber; i++)
     {
         // If the given controlEvents bitmask contains the current event
         if (((int)controlEvents & (1 << i)))
         {
-            this->removeTargetWithActionForControlEvent(target, action, (EventType)(1 << i));
+            this->removeHandlerForControlEvent(key, (EventType)(1 << i));
         }
     }
 }
 
-void Control::removeTargetWithActionForControlEvent(Object* target, Handler action, EventType controlEvent)
+void Control::removeHandlerForControlEvent(const std::string& key, EventType controlEvent)
 {
     // Retrieve all invocations for the given control event
+    //<Invocation*>
     auto& eventInvocationList = this->dispatchListforControlEvent(controlEvent);
+    
+    //remove all invocations if the key is empty
+    //TODO: should the invocations be deleted, or just removed from the array? Won't that cause issues if you add a single invocation for multiple events?
 
-    // remove all invocations if the target and action are null
-    // TODO: should the invocations be deleted, or just removed from the array? Won't that cause issues if you add a
-    // single invocation for multiple events?
-
-    if (!target && !action)
+    if(key == "")
     {
-        // remove objects
+        //remove objects
         eventInvocationList.clear();
     }
     else
     {
         std::vector<Invocation*> tobeRemovedInvocations;
-
-        // normally we would use a predicate, but this won't work here. Have to do it manually
-        for (const auto& invocation : eventInvocationList)
-        {
-            bool shouldBeRemoved = true;
-            if (target)
+        
+        //normally we would use a predicate, but this won't work here. Have to do it manually
+        for(const auto &invocation : eventInvocationList) {
+            if(key == invocation->getKey())
             {
-                shouldBeRemoved = (target == invocation->getTarget());
-            }
-            if (action)
-            {
-                shouldBeRemoved = (shouldBeRemoved && (action == invocation->getAction()));
-            }
-            // Remove the corresponding invocation object
-            if (shouldBeRemoved)
-            {
-                tobeRemovedInvocations.emplace_back(invocation);
+                tobeRemovedInvocations.push_back(invocation);
             }
         }
 
-        for (const auto& invocation : tobeRemovedInvocations)
-        {
+        for(const auto &invocation : tobeRemovedInvocations) {
             eventInvocationList.eraseObject(invocation);
         }
     }
 }
+
 
 // CRGBA protocol
 void Control::setOpacityModifyRGB(bool bOpacityModifyRGB)
