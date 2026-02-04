@@ -836,6 +836,11 @@ static Rect getRect(Node* pNode)
 
 void EditBox::keyboardWillShow(IMEKeyboardNotificationInfo& info)
 {
+    if (_delegate)
+    {
+        _delegate->editBoxShowKeyboard(this);
+    }
+    
     // AXLOGD("EditBox::keyboardWillShow");
     Rect rectTracked = getRect(this);
     // some adjustment for margin between the keyboard and the edit box.
@@ -865,6 +870,10 @@ void EditBox::keyboardWillHide(IMEKeyboardNotificationInfo& info)
     if (_editBoxImpl != nullptr)
     {
         _editBoxImpl->doAnimationWhenKeyboardMove(info.duration, -_adjustHeight);
+    }
+    if (_delegate)
+    {
+        _delegate->editBoxHideKeyboard(this);
     }
 }
 

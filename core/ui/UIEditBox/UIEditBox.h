@@ -66,7 +66,11 @@ public:
     };
 
     virtual ~EditBoxDelegate() {}
-
+    
+    virtual void editBoxShowKeyboard(EditBox* editBox) {}
+    
+    virtual void editBoxHideKeyboard(EditBox* editBox) {}
+    
     /**
      * This method is called when an edit box gains focus after keyboard is shown.
      * @param editBox The edit box object that generated the event.
@@ -85,7 +89,12 @@ public:
      * @param editBox The edit box object that generated the event.
      */
     virtual void editBoxReturn(EditBox* editBox) = 0;
-
+    
+    /**
+     * This method is called when an edit box loses focus after keyboard is hidden.
+     * @param editBox The edit box object that generated the event.
+     */
+    virtual void editBoxEditingDidEnd(EditBox* editBox) {}
     /**
      * This method is called when an edit box loses focus after keyboard is hidden.
      * @param editBox The edit box object that generated the event.

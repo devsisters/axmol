@@ -403,6 +403,7 @@ void EditBoxImplCommon::editBoxEditingDidEnd(std::string_view text, EditBoxDeleg
     if (pDelegate != nullptr)
     {
         pDelegate->editBoxEditingDidEndWithAction(_editBox, action);
+        pDelegate->editBoxEditingDidEnd(_editBox);
         pDelegate->editBoxReturn(_editBox);
     }
 
