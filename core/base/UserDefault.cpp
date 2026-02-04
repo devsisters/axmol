@@ -230,6 +230,19 @@ const std::string* UserDefault::getValueForKey(std::string_view key)
         return &it->second;
     return nullptr;
 }
+    
+Data UserDefault::getDataForKey(const char* pKey, const Data& defaultValue)
+{
+    auto pValue = getValueForKey(pKey);
+    if (pValue)
+    {
+        Data data;
+        data.copy(reinterpret_cast<const unsigned char*>(pValue->data()), pValue->size());
+        return data;
+    }
+
+    return defaultValue;
+}
 
 void UserDefault::setBoolForKey(const char* pKey, bool value)
 {
@@ -328,6 +341,18 @@ void UserDefault::setStringForKey(const char* pKey, std::string_view value)
 #else
     flush();
 #endif
+}
+    
+void UserDefault::setDataForKey(const char* pKey, const Data& value)
+{
+    // ignore empty key
+    if (!pKey || value.isNull())
+    {
+        return;
+    }
+
+//    setValueForKey(pKey, value.);
+
 }
 
 void UserDefault::setValueForKey(std::string_view key, std::string_view value)

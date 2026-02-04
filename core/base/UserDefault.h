@@ -148,7 +148,15 @@ public:
      * @return String value of the key.
      */
     virtual std::string_view getStringForKey(const char* key, std::string_view defaultValue);
-
+    
+    /**
+     * Get Data value by key, if the key doesn't exist, will return an empty Data.
+     * @param key The key to get value.
+     * @param defaultValue The default value to return if the key doesn't exist.
+     * @return Data value of the key.
+     */
+    virtual Data getDataForKey(const char* pKey, const Data& defaultValue = Data::Null);
+    
     // set value methods
 
     /**
@@ -187,7 +195,14 @@ public:
      * @param value A string value to set to the key.
      */
     virtual void setStringForKey(const char* key, std::string_view value);
-
+    
+    /**
+     * Set Data value by key.
+     * @param key The key to set.
+     * @param value A Data value to set to the key.
+     */
+    virtual void setDataForKey(const char* key, const Data& value);
+    
     /**
      * Since we reimplement UserDefault with file mapping io,
      * you don't needs call this function manually
