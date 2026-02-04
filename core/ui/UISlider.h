@@ -200,7 +200,7 @@ public:
      * Changes the progress direction of slider.
      * @param percent  Percent value from 1 to 100.
      */
-    void setPercent(int percent);
+    virtual void setPercent(int percent);
 
     /**
      * Updates the visual elements of the slider.
@@ -212,7 +212,7 @@ public:
      *
      * @return percent Percent value from 1 to 100.
      */
-    int getPercent() const;
+    virtual int getPercent() const;
 
     /**
      * Set a large value could give more control to the precision.
@@ -282,7 +282,7 @@ public:
 
 protected:
     virtual void initRenderer() override;
-    float getPercentWithBallPos(const Vec2& pt) const;
+    virtual float getPercentWithBallPos(const Vec2& pt) const;
     void percentChangedEvent(EventType event);
     virtual void onPressStateChangedToNormal() override;
     virtual void onPressStateChangedToPressed() override;
@@ -291,14 +291,14 @@ protected:
 
     void setupBarTexture();
     void loadBarTexture(SpriteFrame* spriteframe);
-    void setupProgressBarTexture();
+    virtual void setupProgressBarTexture();
     void loadProgressBarTexture(SpriteFrame* spriteframe);
     void loadSlidBallTextureNormal(SpriteFrame* spriteframe);
     void loadSlidBallTexturePressed(SpriteFrame* spriteframe);
     void loadSlidBallTextureDisabled(SpriteFrame* spriteframe);
 
-    void barRendererScaleChangedWithSize();
-    void progressBarRendererScaleChangedWithSize();
+    virtual void barRendererScaleChangedWithSize();
+    virtual void progressBarRendererScaleChangedWithSize();
     virtual Widget* createCloneInstance() override;
     virtual void copySpecialProperties(Widget* model) override;
     virtual void adaptRenderers() override;
