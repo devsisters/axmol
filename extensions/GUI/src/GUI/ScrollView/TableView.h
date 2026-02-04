@@ -29,9 +29,11 @@
 #include "ScrollView.h"
 #include "TableViewCell.h"
 #include "extensions/ExtensionExport.h"
+#include "base/RefPtr.h"
 
 #include <set>
 #include <vector>
+#include <deque>
 
 /**
  * @addtogroup ui
@@ -131,15 +133,11 @@ public:
  *
  * This is a very basic, minimal implementation to bring UITableView-like component into cocos2d world.
  */
-class AX_EX_DLL TableView : public ScrollView, public ScrollViewDelegate
+class AX_EX_DLL TableView
+: public ScrollView
+, public ScrollViewDelegate
 {
 public:
-    enum class VerticalFillOrder
-    {
-        TOP_DOWN,
-        BOTTOM_UP
-    };
-
     /** Empty constructor of TableView */
     static TableView* create();
 
@@ -213,8 +211,9 @@ public:
     /**
      * determines how cell is ordered and filled in the view.
      */
-    void setVerticalFillOrder(VerticalFillOrder order);
-    VerticalFillOrder getVerticalFillOrder();
+    void setVerticalFillOrder(VerticalFillOrder order) override;
+    
+    void setHorizontalFillOrder(HorizontalFillOrder order) override;
 
     /**
      * Updates the content of the cell at a given index.
@@ -251,19 +250,33 @@ public:
      * @param idx index
      * @return a cell at a given index
      */
-    TableViewCell* cellAtIndex(ssize_t idx);
+    TableViewCell *cellAtIndex(ssize_t idx);
 
+    bool isDirty() const { return _isDirty; }
+    virtual void renderCells();
+    
     // Overrides
+    virtual void visit(Renderer* renderer, const Mat4& parentTransform, uint32_t parentFlags) override;
     virtual void scrollViewDidScroll(ScrollView* view) override;
-    virtual void scrollViewDidZoom(ScrollView* view) override {}
+    virtual void scrollViewDidZoom(ScrollView* view)  override {}
     virtual bool onTouchBegan(Touch* pTouch, Event* pEvent) override;
     virtual void onTouchMoved(Touch* pTouch, Event* pEvent) override;
     virtual void onTouchEnded(Touch* pTouch, Event* pEvent) override;
     virtual void onTouchCancelled(Touch* pTouch, Event* pEvent) override;
+    
+    float getLeftMargin() const { return _leftMargin; }
+    float getRightMargin() const { return _rightMargin; }
+    float getTopMargin() const { return _topMargin; }
+    float getBottomMargin() const { return _bottomMargin; }
+    
+    void setLeftMargin(float leftMargin) {_leftMargin = leftMargin; }
+    void setRightMargin(float rightMargin) {_rightMargin = rightMargin; }
+    void setTopMargin(float topMargin) {_topMargin = topMargin; }
+    void setBottomMargin(float bottomMargin) {_bottomMargin = bottomMargin; }
 
 protected:
-    ssize_t __indexFromOffset(Vec2 offset);
-    ssize_t _indexFromOffset(Vec2 offset);
+    long __indexFromOffset(Vec2 offset);
+    long _indexFromOffset(Vec2 offset);
     Vec2 __offsetFromIndex(ssize_t index);
     Vec2 _offsetFromIndex(ssize_t index);
 
@@ -272,23 +285,20 @@ protected:
     void _addCellIfNecessary(TableViewCell* cell);
 
     void _updateCellPositions();
+    void _updateContentSize();
 
     TableViewCell* _touchedCell;
-    /**
-     * vertical direction of cell filling
-     */
-    VerticalFillOrder _vordering;
-
+    
     /**
      * index set to query the indexes of the cells used.
      */
-    std::set<ssize_t>* _indices;
+    std::set<ssize_t> _indices;
 
     /**
      * vector with all cell positions
      */
     std::vector<float> _vCellsPositions;
-    // NSMutableIndexSet *indices_;
+    //NSMutableIndexSet *indices_;
     /**
      * cells that are currently in the table
      */
@@ -296,7 +306,7 @@ protected:
     /**
      * free list of cells
      */
-    Vector<TableViewCell*> _cellsFreed;
+    std::deque<cocos2d::RefPtr<TableViewCell>> _cellsFreed;
     /**
      * weak link to the data source object
      */
@@ -309,9 +319,13 @@ protected:
     Direction _oldDirection;
 
     bool _isUsedCellsDirty;
+    
+    float _leftMargin = 0;
+    float _rightMargin = 0;
+    float _topMargin = 0;
+    float _bottomMargin = 0;
 
-public:
-    void _updateContentSize();
+    bool _isDirty = false;
 };
 
 NS_AX_EXT_END

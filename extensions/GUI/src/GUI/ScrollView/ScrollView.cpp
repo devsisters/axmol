@@ -59,12 +59,15 @@ ScrollView::ScrollView()
     , _touchMoved(false)
     , _bounceable(false)
     , _clippingToBounds(false)
+    , _isAnimating(false)
     , _touchLength(0.0f)
     , _minScale(0.0f)
     , _maxScale(0.0f)
     , _scissorRestored(false)
     , _touchListener(nullptr)
     , _animatedScrollAction(nullptr)
+    , _verticalFillOrder(VerticalFillOrder::TOP_DOWN)
+    , _horizontalFillOrder(HorizontalFillOrder::LEFT_TO_RIGHT)
 {}
 
 ScrollView::~ScrollView()
@@ -247,6 +250,7 @@ void ScrollView::setContentOffsetInDuration(Vec2 offset, float dt)
     {
         stopAnimatedContentOffset();
     }
+    _isAnimating = true;
     scroll                = MoveTo::create(dt, offset);
     expire                = CallFuncN::create(AX_CALLBACK_1(ScrollView::stoppedAnimatedScroll, this));
     _animatedScrollAction = _container->runAction(Sequence::create(scroll, expire, nullptr));
@@ -378,6 +382,16 @@ bool ScrollView::hasVisibleParents() const
     return true;
 }
 
+void ScrollView::setVerticalFillOrder(VerticalFillOrder fillOrder)
+{
+    _verticalFillOrder = fillOrder;
+}
+
+ScrollView::VerticalFillOrder ScrollView::getVerticalFillOrder()
+{
+    return _verticalFillOrder;
+}
+
 void ScrollView::relocateContainer(bool animated)
 {
     Vec2 oldPoint, min, max;
@@ -413,8 +427,21 @@ Vec2 ScrollView::maxContainerOffset()
     Point anchorPoint = _container->isIgnoreAnchorPointForPosition() ? Point::ZERO : _container->getAnchorPoint();
     float contW       = _container->getContentSize().width * _container->getScaleX();
     float contH       = _container->getContentSize().height * _container->getScaleY();
-
-    return Vec2(anchorPoint.x * contW, anchorPoint.y * contH);
+    
+    float offsetX = anchorPoint.x * contW;
+    float offsetY = anchorPoint.y * contH;
+    if (_horizontalFillOrder == HorizontalFillOrder::RIGHT_TO_LEFT)
+    {
+        if (_viewSize.width > contW)
+        {
+            offsetX = _viewSize.width - (1-anchorPoint.x) * contW;
+        }
+    }
+    if (_verticalFillOrder == VerticalFillOrder::BOTTOM_UP)
+    {
+//        offsetY = anchorPoint.y * contH; // 같음
+    }
+    return Vec2(offsetX, offsetY);
 }
 
 Vec2 ScrollView::minContainerOffset()
@@ -422,8 +449,21 @@ Vec2 ScrollView::minContainerOffset()
     Point anchorPoint = _container->isIgnoreAnchorPointForPosition() ? Point::ZERO : _container->getAnchorPoint();
     float contW       = _container->getContentSize().width * _container->getScaleX();
     float contH       = _container->getContentSize().height * _container->getScaleY();
-
-    return Vec2(_viewSize.width - (1 - anchorPoint.x) * contW, _viewSize.height - (1 - anchorPoint.y) * contH);
+    
+    float offsetX = _viewSize.width - (1 - anchorPoint.x) * contW;
+    float offsetY = _viewSize.height - (1 - anchorPoint.y) * contH;
+    if (_horizontalFillOrder == HorizontalFillOrder::RIGHT_TO_LEFT)
+    {
+//        offsetX = _viewSize.width - (1 - anchorPoint.x) * contW;
+    }
+    if (_verticalFillOrder == VerticalFillOrder::BOTTOM_UP)
+    {
+        if (_viewSize.height > contH)
+        {
+            offsetY = anchorPoint.y * contH; // contentSize 가 viewSize 보다 작을때만 처리
+        }
+    }
+    return Vec2(offsetX, offsetY);
 }
 
 void ScrollView::deaccelerateScrolling(float /*dt*/)
@@ -469,6 +509,7 @@ void ScrollView::deaccelerateScrolling(float /*dt*/)
 
 void ScrollView::stoppedAnimatedScroll(Node* /*node*/)
 {
+    _isAnimating = false;
     this->unschedule(AX_SCHEDULE_SELECTOR(ScrollView::performedAnimatedScroll));
     // After the animation stopped, "scrollViewDidScroll" should be invoked, this could fix the bug of lack of tableview
     // cells.
@@ -844,6 +885,11 @@ void ScrollView::onTouchEnded(Touch* touch, Event* /*event*/)
     if (!this->isVisible())
     {
         return;
+    }
+    
+    if (_delegate != nullptr)
+    {
+        _delegate->scrollViewDidTouchEnded(this);
     }
 
     auto touchIter = std::find(_touches.begin(), _touches.end(), touch);

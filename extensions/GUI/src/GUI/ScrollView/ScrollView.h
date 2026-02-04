@@ -55,6 +55,8 @@ public:
      * @lua NA
      */
     virtual void scrollViewDidZoom(ScrollView* view){};
+    
+    virtual void scrollViewDidTouchEnded(ScrollView* view) {};
 };
 
 /**
@@ -70,6 +72,18 @@ public:
         HORIZONTAL = 0,
         VERTICAL,
         BOTH
+    };
+    
+    enum class VerticalFillOrder
+    {
+        TOP_DOWN,
+        BOTTOM_UP
+    };
+    
+    enum class HorizontalFillOrder
+    {
+        LEFT_TO_RIGHT,
+        RIGHT_TO_LEFT,
     };
     /**
      * Returns an autoreleased scroll view object.
@@ -190,6 +204,8 @@ public:
     bool isTouchMoved() const { return _touchMoved; }
     bool isBounceable() const { return _bounceable; }
     void setBounceable(bool bBounceable) { _bounceable = bBounceable; }
+    Vec2 getScrollDistance() { return _scrollDistance; }
+    bool isAnimating() { return _isAnimating; }
 
     /**
      * size to clip. Node boundingBox uses contentSize directly.
@@ -254,6 +270,12 @@ public:
     void updateTweenAction(float value, std::string_view key) override;
 
     bool hasVisibleParents() const;
+    
+   virtual void setVerticalFillOrder(VerticalFillOrder fillOrder);
+   virtual VerticalFillOrder getVerticalFillOrder();
+   
+   virtual void setHorizontalFillOrder(HorizontalFillOrder fillOrder);
+   virtual HorizontalFillOrder getHorisontalFillOrder();
 
 protected:
     /**
@@ -333,6 +355,8 @@ protected:
     bool _bounceable;
 
     bool _clippingToBounds;
+    
+    bool _isAnimating;
 
     /**
      * scroll speed
@@ -376,6 +400,10 @@ protected:
      * Action created with setContentOffsetInDuration(), saved so it can be halted
      */
     Action* _animatedScrollAction;
+    
+   VerticalFillOrder _verticalFillOrder;
+   
+   HorizontalFillOrder _horizontalFillOrder;
 };
 
 NS_AX_EXT_END
