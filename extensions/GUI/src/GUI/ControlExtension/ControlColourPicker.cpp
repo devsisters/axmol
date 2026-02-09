@@ -94,10 +94,8 @@ bool ControlColourPicker::init()
             spriteSheet, Vec2(backgroundPointZero.x + colourShift, backgroundPointZero.y + colourShift));
 
         // Setup events
-        _huePicker->addTargetWithActionForControlEvents(
-            this, cccontrol_selector(ControlColourPicker::hueSliderValueChanged), Control::EventType::VALUE_CHANGED);
-        _colourPicker->addTargetWithActionForControlEvents(
-            this, cccontrol_selector(ControlColourPicker::colourSliderValueChanged), Control::EventType::VALUE_CHANGED);
+        _huePicker->addHandlerForControlEvents(AX_CALLBACK_2(ControlColourPicker::hueSliderValueChanged, this), Control::EventType::VALUE_CHANGED);
+        _colourPicker->addHandlerForControlEvents( AX_CALLBACK_2(ControlColourPicker::colourSliderValueChanged, this), Control::EventType::VALUE_CHANGED);
 
         // Set defaults
         updateHueAndControlPicker();

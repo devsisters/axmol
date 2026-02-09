@@ -275,7 +275,7 @@ public:
    virtual VerticalFillOrder getVerticalFillOrder();
    
    virtual void setHorizontalFillOrder(HorizontalFillOrder fillOrder);
-   virtual HorizontalFillOrder getHorisontalFillOrder();
+   virtual HorizontalFillOrder getHorizontalFillOrder();
 
 protected:
     /**

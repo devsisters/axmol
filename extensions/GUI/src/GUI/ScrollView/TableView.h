@@ -306,7 +306,7 @@ protected:
     /**
      * free list of cells
      */
-    std::deque<cocos2d::RefPtr<TableViewCell>> _cellsFreed;
+    std::deque<RefPtr<TableViewCell>> _cellsFreed;
     /**
      * weak link to the data source object
      */

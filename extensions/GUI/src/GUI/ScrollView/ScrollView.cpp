@@ -392,6 +392,16 @@ ScrollView::VerticalFillOrder ScrollView::getVerticalFillOrder()
     return _verticalFillOrder;
 }
 
+void ScrollView::setHorizontalFillOrder(HorizontalFillOrder fillOrder)
+{
+    _horizontalFillOrder = fillOrder;
+}
+
+ScrollView::HorizontalFillOrder ScrollView::getHorizontalFillOrder()
+{
+    return _horizontalFillOrder;
+}
+
 void ScrollView::relocateContainer(bool animated)
 {
     Vec2 oldPoint, min, max;

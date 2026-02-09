@@ -30,6 +30,7 @@ THE SOFTWARE.
 #include "2d/Sprite.h"
 #include "base/Protocols.h"
 #include "renderer/CustomCommand.h"
+#include "base/EventListenerKeyboard.h"
 
 #include <vector>
 
