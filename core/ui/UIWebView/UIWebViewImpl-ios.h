@@ -95,6 +95,10 @@ public:
     virtual float getOpacityWebView() const;
 
     virtual void setBackgroundTransparent();
+    
+    void addCustomHeader(const std::string &headerKey, const std::string &headerValue);
+    void removeCustomHeader(const std::string &headerKey);
+    void clearCustomHeader();
 
 private:
     UIWebViewWrapper* _uiWebViewWrapper;

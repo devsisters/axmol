@@ -181,6 +181,22 @@ void WebView::setBounces(bool bounces)
 {
     _impl->setBounces(bounces);
 }
+    
+void WebView::addCustomHeader(const std::string &headerKey, const std::string &headerValue)
+{
+    _impl->addCustomHeader(headerKey, headerValue);
+}
+
+void WebView::removeCustomHeader(const std::string &headerKey)
+{
+    _impl->removeCustomHeader(headerKey);
+}
+
+void WebView::clearCustomHeader()
+{
+    _impl->clearCustomHeader();
+}
+
 
 ax::ui::Widget* WebView::createCloneInstance()
 {

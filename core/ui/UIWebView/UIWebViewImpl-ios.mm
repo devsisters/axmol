@@ -82,12 +82,19 @@
 - (void)goForward;
 
 - (void)setScalesPageToFit:(const bool)scalesPageToFit;
+
+- (void)addCustomHeader:(const std::string &)headerKey headerValue:(const std::string &)headerValue;
+
+- (void)removeCustomHeader:(const std::string &)headerKey;
+
+- (void)clearCustomHeader;
 @end
 
 @interface UIWebViewWrapper () <WKUIDelegate, WKNavigationDelegate>
 @property(nonatomic) WKWebView* wkWebView;
 
 @property(nonatomic, copy) NSString* jsScheme;
+@property(nonatomic, retain) NSMutableDictionary *customHeaders;
 @end
 
 @implementation UIWebViewWrapper {
@@ -107,6 +114,7 @@
         self.shouldStartLoading = nullptr;
         self.didFinishLoading   = nullptr;
         self.didFailLoading     = nullptr;
+        self.customHeaders = [[[NSMutableDictionary alloc] init] autorelease];
     }
     return self;
 }
@@ -119,6 +127,7 @@
     [self.wkWebView release];
     self.wkWebView = nil;
     self.jsScheme  = nil;
+    self.customHeaders = nil;
     [super dealloc];
 }
 
@@ -237,6 +246,13 @@
                                timeoutInterval:60];
     else
         request = [NSURLRequest requestWithURL:url];
+    NSMutableURLRequest *mutableRequest = request.mutableCopy;
+    if (self.customHeaders.count > 0) {
+        for (NSString *key in [self.customHeaders allKeys]) {
+            [mutableRequest setValue:self.customHeaders[key] forHTTPHeaderField:key];
+        }
+    }
+    request = [mutableRequest copy];
 
     [self.wkWebView loadRequest:request];
 }
@@ -367,6 +383,24 @@
                                      animated:YES
                                    completion:^{
                                    }];
+}
+
+
+- (void)addCustomHeader:(const std::string &)headerKey headerValue:(const std::string &)headerValue {
+    NSString *keyString = [NSString stringWithUTF8String:headerKey.c_str()];
+    NSString *valueString = [NSString stringWithUTF8String:headerValue.c_str()];
+    [self.customHeaders setObject:valueString forKey:keyString];
+}
+
+- (void)removeCustomHeader:(const std::string &)headerKey {
+    NSString *keyString = [NSString stringWithUTF8String:headerKey.c_str()];
+    if ([[self.customHeaders allKeys] containsObject:keyString]) {
+        [self.customHeaders removeObjectForKey:keyString];
+    }
+}
+
+- (void)clearCustomHeader {
+    [self.customHeaders removeAllObjects];
 }
 
 @end
@@ -538,6 +572,18 @@ float WebViewImpl::getOpacityWebView() const
 void WebViewImpl::setBackgroundTransparent()
 {
     [_uiWebViewWrapper setBackgroundTransparent];
+}
+
+void WebViewImpl::addCustomHeader(const std::string &headerKey, const std::string &headerValue) {
+    [_uiWebViewWrapper addCustomHeader:headerKey headerValue:headerValue];
+}
+
+void WebViewImpl::removeCustomHeader(const std::string &headerKey) {
+    [_uiWebViewWrapper removeCustomHeader:headerKey];
+}
+    
+void WebViewImpl::clearCustomHeader() {
+    [_uiWebViewWrapper clearCustomHeader];
 }
 
 }  // namespace ui

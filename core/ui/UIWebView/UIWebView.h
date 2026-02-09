@@ -207,6 +207,13 @@ public:
      * Set whether the webview bounces at end of scroll of WebView.
      */
     void setBounces(bool bounce);
+    
+    /**
+     * Set custom header
+     */
+    void addCustomHeader(const std::string &headerKey, const std::string &headerValue);
+    void removeCustomHeader(const std::string &headerKey);
+    void clearCustomHeader();
 
     virtual void draw(ax::Renderer* renderer, ax::Mat4 const& transform, uint32_t flags) override;
 
