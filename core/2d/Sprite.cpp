@@ -770,6 +770,9 @@ void Sprite::setCenterRect(const ax::Rect& rectInPoints)
     if (!_originalContentSize.equals(Vec2::ZERO))
     {
         Rect rect = rectInPoints;
+        
+        if (rect.size.width == 0) rect.size.width = 1;
+        if (rect.size.height == 0) rect.size.height = 1;
 
         const float x = rect.origin.x / _rect.size.width;
         const float y = rect.origin.y / _rect.size.height;
@@ -1417,8 +1420,8 @@ void Sprite::updateStretchFactor()
         const float adjustedWidth  = size.width - (_originalContentSize.width - _rect.size.width);
         const float adjustedHeight = size.height - (_originalContentSize.height - _rect.size.height);
 
-        const float x_factor = (adjustedWidth - x1 - x3) / x2;
-        const float y_factor = (adjustedHeight - y1 - y3) / y2;
+        const float x_factor = x2 == 0.f ? 1.f : (adjustedWidth - x1 - x3) / x2;
+        const float y_factor = y2 == 0.f ? 1.f : (adjustedHeight - y1 - y3) / y2;
 
         _stretchFactor = Vec2(std::max(0.0f, x_factor), std::max(0.0f, y_factor));
     }
