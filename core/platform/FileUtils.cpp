@@ -723,6 +723,7 @@ std::string FileUtils::fullPathForFilename(std::string_view filename) const
     }
 
     // The file wasn't found, return empty string.
+    _fullPathCache.emplace(filename, "");
     return std::string{};
 }
 
