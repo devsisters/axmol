@@ -86,6 +86,10 @@ bool UICCTextField::onTextFieldAttachWithIME(TextFieldTTF* /*pSender*/)
 
 bool UICCTextField::onTextFieldInsertText(TextFieldTTF* /*pSender*/, const char* text, size_t nLen)
 {
+    if (_inputText.empty() && strcmp(text, " ") == 0)
+    {
+        return true;
+    }
     if (nLen == 1 && strcmp(text, "\n") == 0)
     {
         return false;
