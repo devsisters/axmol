@@ -2201,7 +2201,8 @@ void FadeTo::update(float time)
 {
     if (_target)
     {
-        _target->setOpacity((uint8_t)(_fromOpacity + (_toOpacity - _fromOpacity) * time));
+        uint8_t opacity = MIN(std::numeric_limits<uint8_t>::max(), (_fromOpacity + (_toOpacity - _fromOpacity) * time));
+        _target->setOpacity(opacity);
     }
 }
 
