@@ -120,17 +120,18 @@ bool EditBox::initWithSizeAndBackgroundSprite(const Vec2& size,
         _editBoxImpl->initWithSize(size);
         _editBoxImpl->setInputMode(EditBox::InputMode::ANY);
 
-        loadTextureNormal(normalSprite->getResourceName(),
-                          normalSprite->getResourceType() == 0 ? TextureResType::LOCAL : TextureResType::PLIST);
+        normalSprite->copyTo(_normalRenderer);
+        this->setupNormalTexture(normalSprite->getSpriteFrame() != nullptr);
+        
         if (pressedSprite != nullptr)
         {
-            loadTexturePressed(pressedSprite->getResourceName(),
-                               pressedSprite->getResourceType() == 0 ? TextureResType::LOCAL : TextureResType::PLIST);
+            pressedSprite->copyTo(_pressedRenderer);
+            setupPressedTexture(pressedSprite->getSpriteFrame() != nullptr);
         }
         if (disabledSprite != nullptr)
         {
-            loadTexturePressed(disabledSprite->getResourceName(),
-                               disabledSprite->getResourceType() == 0 ? TextureResType::LOCAL : TextureResType::PLIST);
+            disabledSprite->copyTo(_disabledRenderer);
+            setupDisabledTexture(disabledSprite->getSpriteFrame() != nullptr);
         }
 
         this->setContentSize(size);
