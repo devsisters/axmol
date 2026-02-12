@@ -162,6 +162,8 @@ public:
     static void releaseFont(std::string_view fontName);
 
     static FT_Library getFTLibrary();
+    
+    void setFallbackFont(const std::vector<std::string> &fallbackFontName);
 
 private:
     static FT_Library _FTlibrary;
@@ -184,7 +186,8 @@ private:
     unsigned char* getGlyphBitmapWithOutline(unsigned int glyphIndex, FT_BBox& bbox);
 
     void setGlyphCollection(GlyphCollection glyphs, std::string_view customGlyphs);
-
+    
+    std::vector<FontFaceInfo> _fallbackFontFaceInfos;
     FT_Face _fontFace;
     FT_Stream _fontStream;
     FT_Stroker _stroker;

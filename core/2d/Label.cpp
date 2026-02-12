@@ -1459,8 +1459,7 @@ void Label::enableOutline(const Color4B& outlineColor, float outlineSize /* = -1
 
             if (outlineSize > 0 && _fontConfig.outlineSize != outlineSize)
             {
-
-                _fontConfig.outlineSize = static_cast<int>(outlineSize);
+                _fontConfig.outlineSize = outlineSize;
                 setTTFConfig(_fontConfig);
             }
             if (_useDistanceField && outlineSize > 0)

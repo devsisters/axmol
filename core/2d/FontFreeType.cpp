@@ -103,23 +103,14 @@ static IFontEngine* s_FontEngine{nullptr};
 
 FontFreeType* FontFreeType::createWithFaceInfo(FontFaceInfo* info, FontFreeType* mainFont)
 {
-    if (stdfs::is_regular_file(info->path))
+    FontFreeType* tempFont = new FontFreeType(mainFont->isDistanceFieldEnabled(), mainFont->getOutlineSize() / AX_CONTENT_SCALE_FACTOR());
+    tempFont->setGlyphCollection(mainFont->_usedGlyphs, mainFont->getGlyphCollection());
+    if (tempFont->initWithFontPath(info->family, mainFont->_faceSize))
     {
-        // create our new face for render
-        FT_Face face;
-        auto error = FT_New_Face(getFTLibrary(), info->path.data(), info->face->face_index, &face);
-        if (!error)
-        {
-            FontFreeType* tempFont = new FontFreeType(mainFont->isDistanceFieldEnabled(), mainFont->getOutlineSize());
-            tempFont->setGlyphCollection(mainFont->_usedGlyphs, mainFont->getGlyphCollection());
-            if (tempFont->initWithFontFace(face, info->path, mainFont->_faceSize))
-            {
-                tempFont->autorelease();
-                return tempFont;
-            }
-            delete tempFont;
-        }
+        tempFont->autorelease();
+        return tempFont;
     }
+    delete tempFont;
     return nullptr;
 }
 
@@ -217,6 +208,15 @@ FontFreeType::~FontFreeType()
 
         if (_fontFace)
             FT_Done_Face(_fontFace);
+        
+        for (const auto & fontRef : _fallbackFontFaceInfos)
+        {
+            FT_Face ftFace = fontRef.face;
+            if(ftFace)
+            {
+                FT_Done_Face(ftFace);
+            }
+        }
     }
 
     delete _fontStream;
@@ -444,14 +444,61 @@ unsigned char* FontFreeType::getGlyphBitmap(char32_t charCode,
                      charUTF8);
 #endif
 
-        if (ppFallbackInfo && s_FontEngine)
+        if (ppFallbackInfo)
         { // try fallback
-            auto faceInfo = s_FontEngine->lookupFontFaceForCodepoint(charCode);
-            if (faceInfo)
+            auto loadFontFace = [this](FontFaceInfo& info) -> bool
             {
-                *ppFallbackInfo = faceInfo;
-                return nullptr;
+                if (info.face != nullptr) return true;
+                
+                const auto& fontPath = info.family;
+                DataRef* sharableData;
+                auto it = s_cacheFontData.find(fontPath);
+                if (it != s_cacheFontData.end())
+                {
+                    sharableData = &it->second;
+                }
+                else
+                {
+                    sharableData       = &s_cacheFontData[fontPath];
+                    sharableData->data = FileUtils::getInstance()->getDataFromFile(fontPath);
+                }
+                
+                ++sharableData->referenceCount;
+                auto& data = sharableData->data;
+                if (!data.isNull())
+                {
+                    auto error = FT_New_Memory_Face(getFTLibrary(), data.getBytes(), static_cast<FT_Long>(data.getSize()), 0, &info.face);
+                    if (error != 0)
+                    {
+                        AXLOGW("FreeType: 폰트 로드 실패! 경로: {}, 에러코드: {}", info.family, error);
+                        return false;
+                    }
+//                        FT_Set_Pixel_Sizes(info.face, 0, _faceSize);
+                }
+                return false;
+
+            };
+            for (auto& fontRef : _fallbackFontFaceInfos)
+            {
+                if (fontRef.face == nullptr)
+                {
+                    loadFontFace(fontRef);
+                }
+                auto glyphIndex = FT_Get_Char_Index(fontRef.face, static_cast<FT_ULong>(charCode));
+                if (glyphIndex != 0)
+                {
+                    fontRef.currentGlyphIndex = glyphIndex;
+                    *ppFallbackInfo = &fontRef;
+                    return nullptr;
+                }
             }
+            
+//            auto faceInfo = s_FontEngine->lookupFontFaceForCodepoint(charCode);
+//            if (faceInfo)
+//            {
+//                *ppFallbackInfo = faceInfo;
+//                return nullptr;
+//            }
         }
 
 		// Not found charCode in system fallback fonts
@@ -707,6 +754,24 @@ void FontFreeType::releaseFont(std::string_view fontName)
             item = s_cacheFontData.erase(item);
         else
             item++;
+    }
+}
+
+void FontFreeType::setFallbackFont(const std::vector<std::string> &fallbackFontName)
+{
+    for(const auto & fontRef : _fallbackFontFaceInfos)
+    {
+        if(fontRef.face)
+        {
+            FT_Done_Face(fontRef.face);
+        }
+    }
+    
+    for(auto & fontName : fallbackFontName)
+    {
+        FontFaceInfo info;
+        info.family = fontName;
+        _fallbackFontFaceInfos.push_back(info);
     }
 }
 

@@ -45,11 +45,10 @@ namespace ax
 struct FontFaceInfo
 {
     FT_Face face                   = nullptr;
-    long index                     = 0;
+//    long index                     = 0;
     unsigned int currentGlyphIndex = 0;
 
-    std::string_view family;
-    std::string_view path;
+    std::string family;
 };
 
 class IFontEngine

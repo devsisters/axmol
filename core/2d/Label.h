@@ -56,7 +56,7 @@ typedef struct _ttfConfig
     GlyphCollection glyphs;
     float fontSize; // The desired render font size
     int faceSize; // The original face size of font, used when distanceFieldEnabled == true
-    int outlineSize;  // The Outline width used in non‑SDF rendering; ignored when distance field is enabled
+    float outlineSize;  // The Outline width used in non‑SDF rendering; ignored when distance field is enabled
 
     bool distanceFieldEnabled;
     bool italics;
@@ -71,7 +71,7 @@ typedef struct _ttfConfig
                const GlyphCollection& glyphCollection = GlyphCollection::DYNAMIC,
                const char* customGlyphCollection      = nullptr, /* nullable */
                bool useDistanceField                  = FontFreeType::isGlobalSDFEnabled(),
-               int outline                            = 0,
+               float outline                          = 0.f,
                bool useItalics                        = false,
                bool useBold                           = false,
                bool useUnderline                      = false,
