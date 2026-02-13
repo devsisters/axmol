@@ -109,8 +109,9 @@ CMakeSettings.json
 /build/linux-build
 
 # ignore all build
-/build
-/build_*
+.cmake_build
+
+
 
 # ignore ninja build dir
 /out
