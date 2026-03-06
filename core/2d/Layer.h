@@ -103,33 +103,7 @@ public:
     bool init() override;
     bool initWithColor(const Color4B& color, float width, float height);
     bool initWithColor(const Color4B& color);
-    
-   virtual bool onTouchBegan(Touch *touch, Event *unused_event);
-   virtual void onTouchMoved(Touch *touch, Event *unused_event);
-   virtual void onTouchEnded(Touch *touch, Event *unused_event);
-   virtual void onTouchCancelled(Touch *touch, Event *unused_event);
 
-   virtual void onTouchesBegan(const std::vector<Touch*>& touches, Event *unused_event);
-   virtual void onTouchesMoved(const std::vector<Touch*>& touches, Event *unused_event);
-   virtual void onTouchesEnded(const std::vector<Touch*>& touches, Event *unused_event);
-   virtual void onTouchesCancelled(const std::vector<Touch*>&touches, Event *unused_event);
-
-   virtual void onKeyPressed(EventKeyboard::KeyCode keyCode, Event* event);
-   virtual void onKeyReleased(EventKeyboard::KeyCode keyCode, Event* event);
-
-protected:
-    int executeScriptTouchHandler(EventTouch::EventCode eventType, Touch* touch, Event* event);
-    int executeScriptTouchesHandler(EventTouch::EventCode eventType, const std::vector<Touch*>& touches, Event* event);
-
-    bool _touchEnabled;
-    bool _accelerometerEnabled;
-    bool _keyboardEnabled;
-    EventListener* _touchListener;
-    EventListenerKeyboard* _keyboardListener;
-
-    Touch::DispatchMode _touchMode;
-    bool _swallowsTouches;
-    
 private:
     AX_DISALLOW_COPY_AND_ASSIGN(LayerColor);
 
