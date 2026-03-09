@@ -62,6 +62,7 @@ public:
     bool isPlaybackEnded() const override { return _playbackEnded; }
     MEMediaState getState() const override;
     bool transferVideoFrame() override;
+    void setMuted(bool isMuted) override;
 
     void onStatusNotification(void* context);
     void onPlayerEnd();
@@ -87,6 +88,7 @@ private:
     bool _bAutoPlay = false;
     bool _repeatEnabled = false;
     bool _playbackEnded = false;
+    bool _isMuted = false;
 
     /*
     true: luma=[0,255] chroma=[1,255]

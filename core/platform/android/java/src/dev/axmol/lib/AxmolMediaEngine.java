@@ -110,6 +110,7 @@ public class AxmolMediaEngine extends DefaultRenderersFactory implements Player.
     private boolean mAutoPlay = false;
     private boolean mLooping = false;
     private long mNativeObj = 0; // native object address for send event to C++, weak ref
+    private boolean mMuted = false;
 
     private boolean mPlaybackEnded = false;
     private AtomicInteger mState = new AtomicInteger(STATE_CLOSED);
@@ -206,6 +207,7 @@ public class AxmolMediaEngine extends DefaultRenderersFactory implements Player.
                 mPlayer.prepare();
                 mPlayer.setRepeatMode(mLooping ? Player.REPEAT_MODE_ALL : Player.REPEAT_MODE_OFF);
                 mPlayer.setPlayWhenReady(mAutoPlay);
+                mPlayer.setMuted(mMuted);
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
@@ -308,6 +310,10 @@ public class AxmolMediaEngine extends DefaultRenderersFactory implements Player.
      */
     public int getState() {
         return mState.get();
+    }
+
+    public void setMuted(boolean isMuted) {
+        mMuted = isMuted;
     }
 
     @Override

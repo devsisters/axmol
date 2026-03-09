@@ -241,6 +241,7 @@ bool AvfMediaEngine::open(std::string_view sourceUri)
     }
 
     _player.actionAtItemEnd = AVPlayerActionAtItemEndPause;
+    [_player setMuted: _isMuted];
 
     // create player item
     _sessionHandler = [[AVMediaSessionHandler alloc] initWithMediaEngine:this];
@@ -511,7 +512,7 @@ bool AvfMediaEngine::setRate(double fRate)
         [_player setRate:fRate];
         // TODO:
 
-        _player.muted = fRate < 0 ? YES : NO;
+        _player.muted = _isMuted || (fRate < 0 ? YES : NO);
     }
     return true;
 }
@@ -594,6 +595,14 @@ bool AvfMediaEngine::stop()
 MEMediaState AvfMediaEngine::getState() const
 {
     return _state;
+}
+void AvfMediaEngine::setMuted(bool isMuted)
+{
+    _isMuted = isMuted;
+    if (_player != nil)
+    {
+        [_player setMuted: isMuted];        
+    }
 }
 
 }

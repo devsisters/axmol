@@ -187,6 +187,12 @@ bool AndroidMediaEngine::transferVideoFrame()
     }
     return false;
 }
+    
+void AndroidMediaEngine::setMuted(bool isMuted)
+{
+    if (context)
+        JniHelper::callVoidMethod(className, "setMuted", context, isMuted);
+}
 
 void AndroidMediaEngine::_storeVideoMeta(int outputX,
                                          int outputY,

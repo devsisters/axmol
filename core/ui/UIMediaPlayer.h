@@ -254,6 +254,8 @@ public:
      */
     virtual void setPlayRate(float fRate);
 
+    virtual void setMuted(bool isMuted);
+    
     /**
      * Starts playback.
      */
@@ -413,6 +415,7 @@ protected:
     bool _fullScreenEnabled      = false;
     bool _keepAspectRatioEnabled = false;
     bool _userInputEnabled       = false;
+    bool _isMuted                = false;
 
     StyleType _styleType = StyleType::DEFAULT;
 

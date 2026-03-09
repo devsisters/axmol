@@ -54,6 +54,7 @@ public:
     bool isPlaybackEnded() const override;
     MEMediaState getState() const override;
     bool transferVideoFrame() override;
+    void setMuted(bool isMuted) override;
 
     // internal stubs
     void _fireMediaEvent(MEMediaEventType event)

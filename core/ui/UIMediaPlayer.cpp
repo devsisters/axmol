@@ -1248,6 +1248,16 @@ void MediaPlayer::setPlayRate(float fRate)
     }
 }
 
+void MediaPlayer::setMuted(bool isMuted)
+{
+    if (!_videoURL.empty())
+    {
+        auto engine = reinterpret_cast<PrivateVideoDescriptor*>(_videoContext)->_engine;
+        if (engine)
+            engine->setMuted(isMuted);
+    }
+}
+
 void MediaPlayer::play()
 {
     if (!_videoURL.empty())
