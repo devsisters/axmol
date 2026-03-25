@@ -578,6 +578,29 @@ public class AxmolEngine {
         editor.apply();
     }
 
+    public static void deleteValueForContainKey(String key){
+        SharedPreferences settings = sActivity.getSharedPreferences(AxmolEngine.PREFS_NAME, 0);
+        SharedPreferences.Editor editor = settings.edit();
+        for (String mapKey : settings.getAll().keySet())
+        {
+            if (mapKey.contains(key))
+            {
+                editor.remove(mapKey);
+            }
+        }
+        editor.apply();
+    }
+
+    public static void deleteValueForAllKey() {
+        SharedPreferences settings = sActivity.getSharedPreferences(AxmolEngine.PREFS_NAME, 0);
+        SharedPreferences.Editor editor = settings.edit();
+        for (String key : settings.getAll().keySet())
+        {
+            editor.remove(key);
+        }
+        editor.apply();
+    }
+
     public static byte[] conversionEncoding(byte[] text, String fromCharset,String newCharset)
     {
         try {

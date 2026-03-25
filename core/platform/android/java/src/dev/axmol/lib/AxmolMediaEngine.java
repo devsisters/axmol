@@ -207,7 +207,7 @@ public class AxmolMediaEngine extends DefaultRenderersFactory implements Player.
                 mPlayer.prepare();
                 mPlayer.setRepeatMode(mLooping ? Player.REPEAT_MODE_ALL : Player.REPEAT_MODE_OFF);
                 mPlayer.setPlayWhenReady(mAutoPlay);
-                mPlayer.setMuted(mMuted);
+                mPlayer.setDeviceMuted(mMuted);
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
