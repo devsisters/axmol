@@ -32,4 +32,5 @@ endif()
 
 if(ANDROID OR LINUX)
   target_link_libraries(curl INTERFACE OpenSSL::SSL)
+  target_link_libraries(curl INTERFACE nghttp2)
 endif()

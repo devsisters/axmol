@@ -253,6 +253,7 @@ if(AX_ENABLE_EXT_LUA)
 endif()
 
 if(AX_WITH_CURL AND NOT EMSCRIPTEN)
+  ax_add_3rd(nghttp2)
   ax_add_3rd(curl)
 endif()
 
