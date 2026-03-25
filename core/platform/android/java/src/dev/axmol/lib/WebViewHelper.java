@@ -41,6 +41,7 @@ import java.lang.reflect.Method;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
+import java.util.Hashtable;
 
 
 public class WebViewHelper {
@@ -51,6 +52,7 @@ public class WebViewHelper {
 
     private static SparseArray<AxmolWebView> webViews;
     private static int viewTag = 0;
+    private static Hashtable<String, String> customHeaders = null;
 
     public WebViewHelper(FrameLayout layout) {
         WebViewHelper.sLayout = layout;
@@ -63,6 +65,10 @@ public class WebViewHelper {
     private static native boolean shouldStartLoading(int index, String message);
 
     public static boolean _shouldStartLoading(int index, String message) {
+        if (customHeaders != null && !customHeaders.isEmpty()) {
+            loadUrl(index, message, false);
+            return false;
+        }
         return !shouldStartLoading(index, message);
     }
 
@@ -243,7 +249,12 @@ public class WebViewHelper {
                 if (webView != null) {
                     webView.getSettings().setCacheMode(cleanCachedData ? WebSettings.LOAD_NO_CACHE
                                                                        : WebSettings.LOAD_DEFAULT);
-                    webView.loadUrl(url);
+                    if (customHeaders != null && !customHeaders.isEmpty()) {
+                        webView.loadUrl(url, customHeaders);
+                    }
+                    else {
+                        webView.loadUrl(url);
+                    }
                 }
             }
         });
@@ -372,5 +383,33 @@ public class WebViewHelper {
                 }
             }
         });
+    }
+
+    public static void addCustomHeader(final String headerKey, final String headerValue)
+    {
+        if (customHeaders == null) {
+            customHeaders = new Hashtable<String, String>();
+        }
+        customHeaders.put(headerKey, headerValue);
+    }
+
+    public static void removeCustomHeader(final String headerKey)
+    {
+        if (customHeaders == null) {
+            return;
+        }
+
+        if (customHeaders.containsKey(headerKey)) {
+            customHeaders.remove(headerKey);
+        }
+    }
+
+    public static void clearCustomHeader()
+    {
+        if (customHeaders == null) {
+            return;
+        }
+
+        customHeaders.clear();
     }
 }

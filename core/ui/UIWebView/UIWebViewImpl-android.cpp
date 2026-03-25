@@ -367,5 +367,21 @@ void WebViewImpl::setBounces(bool bounces)
 {
     // empty function as this was mainly a fix for iOS
 }
+    
+void WebViewImpl::addCustomHeader(const std::string &headerKey, const std::string &headerValue)
+{
+    JniHelper::callStaticVoidMethod(className, "addCustomHeader", headerKey, headerValue);
+}
+
+void WebViewImpl::removeCustomHeader(const std::string &headerKey)
+{
+    JniHelper::callStaticVoidMethod(className, "removeCustomHeader", headerKey);
+}
+
+void WebViewImpl::clearCustomHeader()
+{
+    JniHelper::callStaticVoidMethod(className, "clearCustomHeader");
+}
+    
 }  // namespace ui
 }  // namespace ax

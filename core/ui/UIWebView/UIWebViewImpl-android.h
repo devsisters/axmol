@@ -107,6 +107,10 @@ public:
     static void didFailLoading(const int viewTag, std::string_view url);
     static void onJsCallback(const int viewTag, std::string_view message);
 
+    void addCustomHeader(const std::string &headerKey, const std::string &headerValue);
+    void removeCustomHeader(const std::string &headerKey);
+    void clearCustomHeader();
+    
 private:
     int _viewTag;
     WebView* _webView;
