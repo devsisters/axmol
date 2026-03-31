@@ -157,11 +157,11 @@ void ScrollViewBar::setAutoHideEnabled(bool autoHideEnabled)
         return;
 
     _autoHideEnabled = autoHideEnabled;
-    if (!_autoHideEnabled)
+    if (!_autoHideEnabled && !_touching && _autoHideRemainingTime <= 0)
     {
-        ProtectedNode::setOpacity(255);
+        ProtectedNode::setOpacity(_opacity);
     }
-    else if (!_touching && _autoHideRemainingTime <= 0)
+    else
     {
         ProtectedNode::setOpacity(0);
     }
