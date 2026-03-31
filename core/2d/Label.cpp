@@ -3093,7 +3093,7 @@ bool Label::multilineTextWrap(bool breakOnChar, bool ignoreOverflow)
                 newLetterWidth += letterDef.xAdvance * _fontScale + _additionalKerning;
 
                 nextLetterX += newLetterWidth;
-                tokenRight = nextLetterX / contentScaleFactor;
+                tokenRight = letterPosition.x + letterDef.width * _fontScale;
 
                 if (StringUtils::isUnicodeSpace(character))
                 {
