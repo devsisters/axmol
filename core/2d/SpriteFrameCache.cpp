@@ -458,7 +458,22 @@ bool SpriteFrameCache::isSpriteSheetInUse(uint64_t sheetId) const
 
 SpriteFrame* SpriteFrameCache::findFrame(std::string_view frame)
 {
-    return _spriteFrames.at(computeHash(frame));
+    auto result = _spriteFrames.at(computeHash(frame));
+    if (result != nullptr) return result;
+    
+    auto splitPos = frame.find_last_of("/");
+    if (splitPos == std::string::npos || splitPos == frame.length() - 1)
+    {
+        return nullptr;
+    }
+    auto plist = std::string(frame.substr(0, splitPos)) + ".plist";
+    auto plistFrame = frame.substr(splitPos + 1);
+    auto spriteSheet = getSpriteSheet(plist);
+    if (spriteSheet == nullptr)
+    {
+        return nullptr;
+    }
+    return _spriteFrames.at(computeHash(plistFrame));
 }
 
 SpriteFrame* SpriteFrameCache::findFrame(uint64_t frameId)
