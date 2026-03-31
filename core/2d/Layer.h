@@ -47,6 +47,8 @@ class AX_DLL Layer : public Node
 {
 public:
     static Layer* create();
+    
+    bool init() override;
 };
 
 //

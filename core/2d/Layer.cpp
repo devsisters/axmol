@@ -57,6 +57,11 @@ Layer* Layer::create()
     return ret;
 }
 
+bool Layer::init()
+{
+    return Node::initLayer();
+}
+
 /// LayerColor
 LayerColor::LayerColor() {}
 
