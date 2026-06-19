@@ -78,7 +78,7 @@ void TarBundleFile::loadCrpInfo(const std::string &bundleInfoPath)
         entity->size = value["size"].GetInt64();
         _entityMap[entity->path] = std::move(entity);
     }
-    AXLOG("-cached : %s", infoPath.c_str());
+    AXLOGD("-cached : {}", infoPath);
     _loadedCrpInfoFiles.emplace_back(name);
 }
 

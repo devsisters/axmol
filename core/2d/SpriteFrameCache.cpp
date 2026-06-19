@@ -295,7 +295,7 @@ SpriteFrame* SpriteFrameCache::getSpriteFrameByName(std::string_view name, const
         }
         if (logError)
         {
-            AXLOG("cocos2d: SpriteFrameCache: Frame '%s' isn't found", std::string(name).c_str());
+            AXLOGW("cocos2d: SpriteFrameCache: Frame '{}' isn't found", name);
         }
         if (!useDefaultFrame)
         {
