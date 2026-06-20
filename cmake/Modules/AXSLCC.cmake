@@ -104,33 +104,45 @@ function(ax_target_compile_shaders target_name)
 
     # shader lang
     set(SC_PROFILE "")
+    set(CROSS_ARGS_LIST "")
 
     if(AX_GLES_PROFILE)
       # version 300 es
       if(AX_GLES_PROFILE EQUAL 300)
         set(OUT_LANG "ESSL")
         set(SC_PROFILE "300")
+        set(CROSS_SC_DEFINES "AXSLC_TARGET_GLES")
       else()
         # GLSL2 use glsl100 syntax es profile alka essl100
         set(OUT_LANG "ESSL")
         set(SC_PROFILE "100")
         set(SC_DEFINES "GLES2")
+        set(CROSS_SC_DEFINES "AXSLC_TARGET_GLES2")
       endif()
 
+      set(CROSS_SC_DEFINES "AXSLC_TARGET_GLSL,${CROSS_SC_DEFINES}")
+      list(APPEND CROSS_ARGS_LIST "--lang=gles --profile=${SC_PROFILE} --defines=${CROSS_SC_DEFINES}")
       list(APPEND SC_FLAGS "--lang=gles" "--profile=${SC_PROFILE}")
     elseif(AX_USE_GL)
       # version 330
       set(OUT_LANG "GLSL")
       set(SC_PROFILE "330")
+      list(APPEND CROSS_ARGS_LIST "--lang=glsl --profile=${SC_PROFILE} --defines=AXSLC_TARGET_GLSL")
       list(APPEND SC_FLAGS "--lang=glsl" "--profile=${SC_PROFILE}")
     elseif(AX_USE_METAL)
       set(OUT_LANG "MSL")
+      list(APPEND CROSS_ARGS_LIST "--lang=msl --defines=AXSLC_TARGET_MSL")
       list(APPEND SC_FLAGS "--lang=msl")
       set(SC_DEFINES "METAL")
     endif()
 
-    # automap, no-suffix since 1.18.1 released by axmolengine
-    list(APPEND SC_FLAGS "--automap" "--no-suffix")
+    string(JOIN "&" CROSS_ARGS ${CROSS_ARGS_LIST})
+
+    # no-suffix since 1.18.1 released by axmolengine
+    list(APPEND SC_FLAGS "--no-suffix")
+
+    # auto-map uniform block bindings required by GLES shader conversion
+    list(APPEND SC_FLAGS "--auto-map-bindings")
 
     # defines
     get_source_file_property(SOURCE_SC_DEFINES ${SC_FILE} AXSLCC_DEFINES)
@@ -140,7 +152,7 @@ function(ax_target_compile_shaders target_name)
     endif()
 
     if(SC_DEFINES)
-      list(APPEND SC_FLAGS "\"--defines=${SC_DEFINES}\"")
+      list(APPEND SC_FLAGS "--defines=${SC_DEFINES}")
     endif()
 
     # includes
@@ -157,10 +169,8 @@ function(ax_target_compile_shaders target_name)
       list(APPEND SC_FLAGS "--cvar=shader_rt_${FILE_NAME}")
     endif()
 
-    # sgs, because Apple Metal lack of shader uniform reflect so use --sgs --refelect
-    if(AX_USE_METAL)
-      list(APPEND SC_FLAGS "--sgs" "--reflect")
-    endif()
+    # use --sgs --reflect for all render apis
+    list(APPEND SC_FLAGS "--sgs" "--reflect")
 
     # input
     if(${FILE_EXT} IN_LIST AXSLCC_FRAG_SOURCE_FILE_EXTENSIONS)
@@ -196,16 +206,17 @@ function(ax_target_compile_shaders target_name)
       list(APPEND SC_FLAGS "--output=${SC_OUTPUT}")
       set_source_files_properties(${SC_FILE} DIRECTORY ${CMAKE_BINARY_DIR} PROPERTIES AXSLCC_OUTPUT ${SC_OUTPUT})
       add_custom_command(
-        MAIN_DEPENDENCY ${SC_FILE} OUTPUT ${SC_OUTPUT} COMMAND ${AXSLCC_EXE} ${SC_FLAGS}
+        MAIN_DEPENDENCY ${SC_FILE} OUTPUT ${SC_OUTPUT} COMMAND ${AXSLCC_EXE} ${SC_FLAGS} "--cross-args=${CROSS_ARGS}"
         COMMENT "${SC_COMMENT}"
+        VERBATIM
       )
       list(APPEND compiled_shaders ${SC_OUTPUT})
     else() # dual outputs
       set(SC_DEFINES1 "${SC_DEFINES},${SOURCE_SC_OUTPUT1}")
 
       set(SC_FLAGS1 ${SC_FLAGS})
-      list(REMOVE_ITEM SC_FLAGS1 "\"--defines=${SC_DEFINES}\"")
-      list(APPEND SC_FLAGS1 "\"--defines=${SC_DEFINES1}\"")
+      list(REMOVE_ITEM SC_FLAGS1 "--defines=${SC_DEFINES}")
+      list(APPEND SC_FLAGS1 "--defines=${SC_DEFINES1}")
 
       list(APPEND SC_FLAGS "--output=${SC_OUTPUT}")
 
@@ -216,9 +227,10 @@ function(ax_target_compile_shaders target_name)
       add_custom_command(
         MAIN_DEPENDENCY ${SC_FILE}
         OUTPUT ${SC_OUTPUT} ${SC_OUTPUT1}
-        COMMAND ${AXSLCC_EXE} ${SC_FLAGS}
-        COMMAND ${AXSLCC_EXE} ${SC_FLAGS1}
+        COMMAND ${AXSLCC_EXE} ${SC_FLAGS} "--cross-args=${CROSS_ARGS}"
+        COMMAND ${AXSLCC_EXE} ${SC_FLAGS1} "--cross-args=${CROSS_ARGS}"
         COMMENT "${SC_COMMENT}"
+        VERBATIM
       )
       list(APPEND compiled_shaders ${SC_OUTPUT} ${SC_OUTPUT1})
     endif()

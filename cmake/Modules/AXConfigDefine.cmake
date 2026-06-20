@@ -256,7 +256,7 @@ if(EMSCRIPTEN)
 
   message(STATUS "AX_WASM_THREADS=${AX_WASM_THREADS}${_threads_hint}")
 
-  if(AX_WASM_THREADS MATCHES "^([0-9]+)$" OR AX_WASM_THREADS STREQUAL "navigator.hardwareConcurrency")
+  if((AX_WASM_THREADS MATCHES "^([0-9]+)$" AND AX_WASM_THREADS GREATER 0) OR AX_WASM_THREADS STREQUAL "navigator.hardwareConcurrency")
     list(APPEND _ax_compile_options -pthread)
     list(APPEND _AX_EM_LD_FLAGS -pthread -sPTHREAD_POOL_SIZE=${AX_WASM_THREADS})
   endif()
