@@ -224,6 +224,13 @@ void ProgramGL::setBuiltinLocations()
     /*--- Builtin Attribs ---*/
 
     std::fill(_builtinAttributeLocation, _builtinAttributeLocation + Attribute::ATTRIBUTE_MAX, -1);
+    for (auto& location : _builtinUniformLocation)
+    {
+        location.reset();
+    }
+
+    if (!_program)
+        return;
 
     /// a_position
     _builtinAttributeLocation[Attribute::POSITION] = getAttributeLocation(ATTRIBUTE_NAME_POSITION);
@@ -457,6 +464,8 @@ int ProgramGL::getAttributeLocation(Attribute name) const
 
 int ProgramGL::getAttributeLocation(std::string_view name) const
 {
+    if (!_program)
+        return -1;
     return glGetAttribLocation(_program, name.data());
 }
 

@@ -169,8 +169,11 @@ function(ax_target_compile_shaders target_name)
       list(APPEND SC_FLAGS "--cvar=shader_rt_${FILE_NAME}")
     endif()
 
-    # use --sgs --reflect for all render apis
-    list(APPEND SC_FLAGS "--sgs" "--reflect")
+    # Metal reflection needs the packed axslcc container. OpenGL/WebGL paths in this checkout
+    # load shader files as plain source text, so GLES/GL outputs must not use --sgs.
+    if(AX_USE_METAL)
+      list(APPEND SC_FLAGS "--sgs" "--reflect")
+    endif()
 
     # input
     if(${FILE_EXT} IN_LIST AXSLCC_FRAG_SOURCE_FILE_EXTENSIONS)
