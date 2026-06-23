@@ -214,8 +214,15 @@ void ParticleSystemQuad::updateTexCoords()
 {
     if (_texture)
     {
-        const Vec2& s = _texture->getContentSize();
-        initTexCoordsWithRect(Rect(0, 0, s.width, s.height));
+        if (_rect.size.width > 0 && _rect.size.height > 0)
+        {
+            initTexCoordsWithRect(_rect);
+        }
+        else
+        {
+            const Size& s = _texture->getContentSize();
+            initTexCoordsWithRect(Rect(0, 0, s.width, s.height));
+        }
     }
 }
 
@@ -229,18 +236,22 @@ void ParticleSystemQuad::setTextureWithRect(Texture2D* texture, const Rect& rect
         auto programState = _quadCommand.getPipelineDescriptor().programState;
         programState->setTexture(_texture->getBackendTexture());
     }
-
+    _rect = rect;
     this->initTexCoordsWithRect(rect);
 }
 
 void ParticleSystemQuad::setTexture(Texture2D* texture)
 {
     const Vec2& s = texture->getContentSize();
+    _rect = Rect(0, 0, s.width, s.height);
     this->setTextureWithRect(texture, Rect(0, 0, s.width, s.height));
 }
 
 void ParticleSystemQuad::setDisplayFrame(SpriteFrame* spriteFrame)
 {
+    if (!spriteFrame)
+        return;
+
     AXASSERT(spriteFrame->getOffsetInPixels().isZero(), "QuadParticle only supports SpriteFrames with no offsets");
 
     this->setTextureWithRect(spriteFrame->getTexture(), spriteFrame->getRect());
@@ -786,7 +797,10 @@ void ParticleSystemQuad::setTotalParticles(int tp)
 
     // fixed issue #5762
     // reset the emission rate
-    setEmissionRate(_totalParticles / _life);
+    if (_emissionRate == 0)
+    {
+        setEmissionRate(_totalParticles / _life);
+    }
 
     resetSystem();
 }

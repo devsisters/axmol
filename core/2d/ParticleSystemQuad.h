@@ -163,6 +163,8 @@ protected:
 
     QuadCommand _quadCommand;  // quad command
 
+    Rect _rect = Rect::ZERO;
+
     backend::UniformLocation _mvpMatrixLocaiton;
     backend::UniformLocation _textureLocation;
 

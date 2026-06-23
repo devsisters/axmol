@@ -33,6 +33,70 @@
 
 NS_AX_BACKEND_BEGIN
 
+#define SC_CHUNK sgs_makefourcc('A', 'X', 'S', 'C')
+#define SC_SHADER_LANG_MSL 2
+
+#pragma pack(push, 1)
+struct sc_chunk
+{
+    uint16_t major;
+    uint16_t minor;
+    uint16_t num_targets;
+    uint16_t reserved;
+};
+
+struct sc_chunk_refl
+{
+    char name[32];
+    uint32_t num_inputs;
+    uint32_t num_textures;
+    uint32_t num_uniform_buffers;
+    uint32_t num_storage_images;
+    uint32_t num_storage_buffers;
+    uint16_t flatten_ubo;
+    uint16_t debug_info;
+};
+
+struct sc_refl_input
+{
+    char name[32];
+    char semantic[32];
+    int32_t location;
+    uint16_t semantic_index;
+    uint16_t var_type;
+};
+
+struct sc_refl_texture
+{
+    char name[32];
+    int32_t binding;
+    uint8_t image_dim;
+    uint8_t multisample : 1;
+    uint8_t arrayed : 1;
+    uint8_t reserved : 6;
+    uint8_t count;
+    uint8_t sampler_slot;
+};
+
+struct sc_refl_buffer
+{
+    char name[32];
+    int32_t binding;
+    uint32_t size_bytes;
+    uint32_t array_stride;
+};
+
+struct sc_refl_ub
+{
+    char name[32];
+    int32_t binding;
+    uint32_t size_bytes;
+    uint16_t array_size;
+    uint16_t num_members;
+};
+
+#pragma pack(pop)
+
 struct SLCReflectContext
 {
     sgs_chunk_refl* refl;
@@ -53,119 +117,227 @@ ShaderModuleMTL::ShaderModuleMTL(id<MTLDevice> mtlDevice, ShaderStage stage, std
 {
     yasio::fast_ibstream_view ibs(source.data(), source.length());
     uint32_t fourccId = ibs.read<uint32_t>();
-    if (fourccId != SGS_CHUNK)
+
+    std::string_view mslCode;
+    const bool isScChunk = fourccId == SC_CHUNK;
+
+    if (isScChunk)
     {
+        auto sc_size = ibs.read<uint32_t>();
+        (void)sc_size;
+        struct sc_chunk chunk;
+        ibs.read_bytes(&chunk, static_cast<int>(sizeof(chunk)));
+
+        uint32_t stageOffset = 0;
+        uint32_t fallbackStageOffset = 0;
+        for (int i = 0; i < chunk.num_targets; ++i)
+        {
+            auto lang = ibs.read<int>();
+            ibs.advance(sizeof(uint32_t));  // profile_ver is only needed for HLSL.
+            auto offset = ibs.read<uint32_t>();
+
+            if (!fallbackStageOffset)
+                fallbackStageOffset = offset;
+
+            if (lang == SC_SHADER_LANG_MSL)
+            {
+                stageOffset = offset;
+                break;
+            }
+        }
+
+        if (!stageOffset)
+            stageOffset = fallbackStageOffset;
+
+        if (!stageOffset)
+        {
+            assert(false);
+            return;
+        }
+
+        ibs.seek(stageOffset, SEEK_SET);
+    }
+    else
+    {
+        if (fourccId != SGS_CHUNK)
+        {
+            assert(false);
+            return;
+        }
+        auto sgs_size = ibs.read<uint32_t>();  // always 0, doesn't matter
+        (void)sgs_size;
+        struct sgs_chunk chunk;
+        ibs.read_bytes(&chunk, static_cast<int>(sizeof(chunk)));
+    }
+
+    fourccId = ibs.read<uint32_t>();
+    if (fourccId != SGS_CHUNK_STAG)
+    {
+        assert(false);
+        return;  // error
+    }
+
+    auto stage_size       = ibs.read<uint32_t>();  // stage_size
+    auto stage_id         = ibs.read<uint32_t>();  // stage_id
+    ShaderStage ref_stage = (ShaderStage)-1;
+    if (stage_id == SGS_STAGE_VERTEX)
+        ref_stage = ShaderStage::VERTEX;
+    else if (stage_id == SGS_STAGE_FRAGMENT)
+        ref_stage = ShaderStage::FRAGMENT;
+
+    assert(ref_stage == stage);
+
+    int code_size = 0;
+    fourccId      = ibs.read<uint32_t>();
+    if (fourccId == SGS_CHUNK_CODE || fourccId == SGS_CHUNK_DATA)
+    {
+        code_size = ibs.read<int>();
+        mslCode   = ibs.read_bytes(code_size);
+    }
+    else
+    {
+        // no text or binary code chunk
         assert(false);
         return;
     }
-    auto sgs_size = ibs.read<uint32_t>();  // always 0, doesn't matter
-    struct sgs_chunk chunk;
-    ibs.read_bytes(&chunk, static_cast<int>(sizeof(chunk)));
 
-    std::string_view mslCode;
-
-    do
-    {
+    if (!ibs.eof())
+    {  // try read reflect info
         fourccId = ibs.read<uint32_t>();
-        if (fourccId != SGS_CHUNK_STAG)
+        if (fourccId != SGS_CHUNK_REFL)
         {
             assert(false);
-            return;  // error
+            return;
         }
-        auto stage_size       = ibs.read<uint32_t>();  // stage_size
-        auto stage_id         = ibs.read<uint32_t>();  // stage_id
-        ShaderStage ref_stage = (ShaderStage)-1;
-        if (stage_id == SGS_STAGE_VERTEX)
-            ref_stage = ShaderStage::VERTEX;
-        else if (stage_id == SGS_STAGE_FRAGMENT)
-            ref_stage = ShaderStage::FRAGMENT;
 
-        assert(ref_stage == stage);
+        const auto refl_size = ibs.read<uint32_t>();
+        const auto refl_data_offset = ibs.tell();
+        if (isScChunk)
+        {
+            sc_chunk_refl refl;
+            ibs.advance(sizeof(refl.name));
+            refl.num_inputs = ibs.read<uint32_t>();
+            refl.num_textures = ibs.read<uint32_t>();
+            refl.num_uniform_buffers = ibs.read<uint32_t>();
+            refl.num_storage_images = ibs.read<uint32_t>();
+            refl.num_storage_buffers = ibs.read<uint32_t>();
+            ibs.advance(sizeof(sc_chunk_refl) - offsetof(sc_chunk_refl, flatten_ubo));
 
-        int code_size = 0;
-        fourccId      = ibs.read<uint32_t>();
-        if (fourccId == SGS_CHUNK_CODE)
-        {
-            code_size = ibs.read<int>();
-            mslCode   = ibs.read_bytes(code_size);
-        }
-        else if (fourccId == SGS_CHUNK_DATA)
-        {
-            code_size = ibs.read<int>();
-            mslCode   = ibs.read_bytes(code_size);
+            for (int i = 0; i < refl.num_inputs; ++i)
+            {
+                std::string_view name = _sgs_read_name(&ibs);
+                ibs.advance(sizeof(sc_refl_input::semantic));
+                auto loc = ibs.read<int32_t>();
+                ibs.advance(sizeof(sc_refl_input::semantic_index) + sizeof(sc_refl_input::var_type));
+
+                AttributeBindInfo attributeInfo;
+                attributeInfo.location = loc;
+                _attributeInfo[name]   = attributeInfo;
+            }
+
+            _uniformBufferSize = 0;
+            for (int i = 0; i < refl.num_uniform_buffers; ++i)
+            {
+                ibs.advance(sizeof(sc_refl_ub::name));
+                auto ub_binding = ibs.read<int32_t>();
+                auto ub_size_bytes = ibs.read<uint32_t>();
+                ibs.advance(sizeof(sc_refl_ub::array_size));
+                auto ub_num_members = ibs.read<uint16_t>();
+
+                for (int k = 0; k < ub_num_members; ++k)
+                {
+                    UniformInfo uniform;
+                    auto name       = _sgs_read_name(&ibs);
+                    auto offset     = ibs.read<int32_t>();
+                    auto size_bytes = ibs.read<uint32_t>();
+                    auto array_size = ibs.read<uint16_t>();
+                    auto var_type   = ibs.read<uint16_t>();
+
+                    uniform.count               = array_size;
+                    uniform.location            = ub_binding;
+                    uniform.size                = size_bytes;
+                    uniform.bufferOffset        = offset;
+                    uniform.type                = var_type;
+                    _activeUniformInfos[name]   = uniform;
+
+                    if (_maxLocation < i)
+                        _maxLocation = (i + 1);
+                }
+                _uniformBufferSize = ub_size_bytes;
+                break;
+            }
+
+            for (int i = 0; i < refl.num_textures; ++i)
+            {
+                std::string_view name = _sgs_read_name(&ibs);
+                auto binding = ibs.read<int32_t>();
+                ibs.advance(sizeof(sc_refl_texture) - offsetof(sc_refl_texture, image_dim));
+
+                UniformInfo uniform;
+                uniform.location          = binding;
+                uniform.bufferOffset      = -1;
+                _activeUniformInfos[name] = uniform;
+            }
+
+            ibs.advance(refl.num_storage_images * sizeof(sc_refl_texture));
+            ibs.advance(refl.num_storage_buffers * sizeof(sc_refl_buffer));
         }
         else
         {
-            // no text or binary code chunk
-            assert(false);
+            /*
+             REFL: Reflection data for the shader stage
+             struct sgs_chunk_refl: reflection data header
+             struct sgs_refl_input[]: array of vertex-shader input attributes (see sgs_chunk_refl for number of
+             inputs) struct sgs_refl_uniformbuffer[]: array of uniform buffer objects (see sgs_chunk_refl for number
+             of uniform buffers) struct sgs_refl_texture[]: array of texture objects (see sgs_chunk_refl for number
+             of textures) struct sgs_refl_texture[]: array of storage image objects (see sgs_chunk_refl for number
+             of storage images) struct sgs_refl_buffer[]: array of storage buffer objects (see sgs_chunk_refl for
+             number of storage buffers)
+             */
+            sgs_chunk_refl refl;
+            ibs.advance(sizeof(refl.name));
+            refl.num_inputs = ibs.read<uint32_t>();
+            refl.num_textures = ibs.read<uint32_t>();
+            refl.num_uniform_buffers = ibs.read<uint32_t>();
+            refl.num_storage_images = ibs.read<uint32_t>();
+            refl.num_storage_buffers = ibs.read<uint32_t>();
+
+            // skip infos we don't need
+            ibs.advance(sizeof(sgs_chunk_refl) - offsetof(sgs_chunk_refl, flatten_ubos));
+
+            SLCReflectContext context{&refl, &ibs};
+
+            // refl_inputs
+            parseAttibute(&context);
+
+            // refl_uniformbuffers
+            parseUniform(&context);
+
+            // refl_textures
+            parseTexture(&context);
+
+            // refl_storage_images: ignore
+            ibs.advance(refl.num_storage_images * sizeof(sgs_refl_texture));
+
+            // refl_storage_buffers: ignore
+            ibs.advance(refl.num_storage_buffers * sizeof(sgs_refl_buffer));
         }
 
-        size_t refl_size = 0;
-        if (!ibs.eof())
-        {  // try read reflect info
-            fourccId = ibs.read<uint32_t>();
-            if (fourccId == SGS_CHUNK_REFL)
-            {
-                /*
-                 REFL: Reflection data for the shader stage
-                 struct sgs_chunk_refl: reflection data header
-                 struct sgs_refl_input[]: array of vertex-shader input attributes (see sgs_chunk_refl for number of
-                 inputs) struct sgs_refl_uniformbuffer[]: array of uniform buffer objects (see sgs_chunk_refl for number
-                 of uniform buffers) struct sgs_refl_texture[]: array of texture objects (see sgs_chunk_refl for number
-                 of textures) struct sgs_refl_texture[]: array of storage image objects (see sgs_chunk_refl for number
-                 of storage images) struct sgs_refl_buffer[]: array of storage buffer objects (see sgs_chunk_refl for
-                 number of storage buffers)
-                 */
-                const auto refl_size = ibs.read<uint32_t>();
-                const auto refl_data_offset = ibs.tell();
-                sgs_chunk_refl refl;
-                ibs.advance(sizeof(refl.name));
-                refl.num_inputs = ibs.read<uint32_t>();
-                refl.num_textures = ibs.read<uint32_t>();
-                refl.num_uniform_buffers = ibs.read<uint32_t>();
-                refl.num_storage_images = ibs.read<uint32_t>();
-                refl.num_storage_buffers = ibs.read<uint32_t>();
+        assert(ibs.tell() - refl_data_offset == refl_size);
+    }
 
-                // skip infos we don't need
-                ibs.advance(sizeof(sgs_chunk_refl) - offsetof(sgs_chunk_refl, flatten_ubos));
+    assert(ibs.eof());
 
-                SLCReflectContext context{&refl, &ibs};
-
-                // refl_inputs
-                parseAttibute(&context);
-
-                // refl_uniformbuffers
-                parseUniform(&context);
-
-                // refl_textures
-                parseTexture(&context);
-
-                // refl_storage_images: ignore
-                ibs.advance(refl.num_storage_images * sizeof(sgs_refl_texture));
-
-                // refl_storage_buffers: ignore
-                ibs.advance(refl.num_storage_buffers * sizeof(sgs_refl_buffer));
-
-                assert(ibs.tell() - refl_data_offset == refl_size);
-            }
-            else
-            {
-                assert(false);
-                return;
-            }
-        }
-
-        assert(ibs.eof());
-    } while (false);  // iterator stages, current only 1 stage
-
-    auto metalShader = mslCode.data();
-    NSString* shader = [NSString stringWithUTF8String:metalShader];
+    NSString* shader = [[NSString alloc] initWithBytes:mslCode.data()
+                                                length:mslCode.length()
+                                              encoding:NSUTF8StringEncoding];
     NSError* error;
     id<MTLLibrary> library = [mtlDevice newLibraryWithSource:shader options:nil error:&error];
     if (!library)
     {
         NSLog(@"Can not compile metal shader: %@", error);
-        NSLog(@"%s", metalShader);
+        NSLog(@"%@", shader);
+        [shader release];
         assert(false);
         return;
     }
@@ -175,12 +347,13 @@ ShaderModuleMTL::ShaderModuleMTL(id<MTLDevice> mtlDevice, ShaderStage stage, std
     if (!_mtlFunction)
     {
         NSLog(@"metal shader is ---------------");
-        NSLog(@"%s", metalShader);
+        NSLog(@"%@", shader);
         assert(false);
     }
 
     setBuiltinLocations();
 
+    [shader release];
     [library release];
 }
 
