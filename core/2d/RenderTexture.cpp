@@ -261,6 +261,142 @@ bool RenderTexture::initWithWidthAndHeight(int w,
     return ret;
 }
 
+RenderTexture* RenderTexture::create(int w,
+                                     int h,
+                                     backend::PixelFormat eFormat,
+                                     PixelFormat uDepthStencilFormat,
+                                     bool sharedRenderTarget,
+                                     float pixelScale)
+{
+    RenderTexture* ret = new RenderTexture();
+
+    if (ret->initWithWidthAndHeight(w, h, eFormat, uDepthStencilFormat, sharedRenderTarget, pixelScale))
+    {
+        ret->autorelease();
+        return ret;
+    }
+    AX_SAFE_DELETE(ret);
+    return nullptr;
+}
+
+bool RenderTexture::initWithWidthAndHeight(int w,
+                                           int h,
+                                           backend::PixelFormat format,
+                                           PixelFormat depthStencilFormat,
+                                           bool sharedRenderTarget,
+                                           float pixelScale)
+{
+    AXASSERT(format == backend::PixelFormat::RGBA8 || format == PixelFormat::RGB8 || format == PixelFormat::RGBA4,
+             "only RGB and RGBA formats are valid for a render texture");
+
+    bool ret = false;
+    do
+    {
+        int designW = w;
+        int designH = h;
+
+        _fullRect = _rtTextureRect = Rect(0, 0, w, h);
+        w                          = (int)(w * pixelScale);
+        h                          = (int)(h * pixelScale);
+        _fullviewPort              = Rect(0, 0, w, h);
+
+        setContentSize(Vec2(static_cast<float>(w), static_cast<float>(h)));
+
+        // textures must be power of two squared
+        int powW = 0;
+        int powH = 0;
+
+        if (Configuration::getInstance()->supportsNPOT())
+        {
+            powW = w;
+            powH = h;
+        }
+        else
+        {
+            powW = utils::nextPOT(w);
+            powH = utils::nextPOT(h);
+        }
+
+        backend::TextureDescriptor descriptor;
+        descriptor.width         = powW;
+        descriptor.height        = powH;
+        descriptor.textureUsage  = TextureUsage::RENDER_TARGET;
+        descriptor.textureFormat = PixelFormat::RGBA8;
+        _texture2D               = new Texture2D();
+        _texture2D->updateTextureDescriptor(descriptor, !!AX_ENABLE_PREMULTIPLIED_ALPHA);
+
+        if (PixelFormat::D24S8 == depthStencilFormat || sharedRenderTarget)
+        {
+            descriptor.textureFormat = PixelFormat::D24S8;
+
+            AX_SAFE_RELEASE(_depthStencilTexture);
+
+            _depthStencilTexture = new Texture2D();
+            _depthStencilTexture->updateTextureDescriptor(descriptor);
+        }
+
+        AX_SAFE_RELEASE(_renderTarget);
+
+        if (sharedRenderTarget)
+        {
+            _renderTarget = _director->getRenderer()->getOffscreenRenderTarget();
+            _renderTarget->retain();
+        }
+        else
+        {
+            _renderTarget = backend::DriverBase::getInstance()->newRenderTarget(
+                _texture2D ? _texture2D->getBackendTexture() : nullptr,
+                _depthStencilTexture ? _depthStencilTexture->getBackendTexture() : nullptr,
+                _depthStencilTexture ? _depthStencilTexture->getBackendTexture() : nullptr);
+        }
+
+        _renderTarget->setColorAttachment(_texture2D ? _texture2D->getBackendTexture() : nullptr);
+
+        auto depthStencilTexture = _depthStencilTexture ? _depthStencilTexture->getBackendTexture() : nullptr;
+        _renderTarget->setDepthAttachment(depthStencilTexture);
+        _renderTarget->setStencilAttachment(depthStencilTexture);
+
+        clearColorAttachment();
+
+        _texture2D->setAntiAliasTexParameters();
+
+        // retained
+        setSprite(Sprite::createWithTexture(_texture2D));
+
+        // createWithTexture가 PolygonInfo vertices = (0,0)-(contentSize) = (0,0)-(812.5,375.5)으로 설정,
+        // UV=[0,1]. update()에서 displayScale = SCREEN_WIDTH/contentSize.x 로 보정하면:
+        //   world(v=0)      = pos + scale*(0 - contentSize/2) = 0  →  pos = scale*contentSize/2
+        //   world(v=812.5)  = pos + scale*(812.5 - contentSize/2) = SCREEN_WIDTH (=692)
+        // → 화면을 정확히 덮고 UV [0,1]로 전체 고해상도 텍스처 사용 가능.
+        _sprite->setAnchorPoint(Vec2::ANCHOR_MIDDLE);
+        _sprite->setPosition(_sprite->getContentSize() / 2);
+
+#if defined(AX_USE_GL)
+        _sprite->setFlippedY(true);
+#endif
+
+        if (_texture2D->hasPremultipliedAlpha())
+        {
+            _sprite->setBlendFunc(BlendFunc::ALPHA_PREMULTIPLIED);
+            _sprite->setOpacityModifyRGB(true);
+        }
+        else
+        {
+            _sprite->setBlendFunc(BlendFunc::ALPHA_NON_PREMULTIPLIED);
+            _sprite->setOpacityModifyRGB(false);
+        }
+
+        _texture2D->release();
+
+        // Disabled by default.
+        _autoDraw = false;
+
+        ret = true;
+    } while (0);
+
+    return ret;
+}
+
 void RenderTexture::onEnter()
 {
     Node::onEnter();

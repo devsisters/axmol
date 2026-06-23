@@ -97,6 +97,31 @@ public:
      */
     static RenderTexture* create(int w, int h, bool sharedRenderTarget = false);
 
+    /** Creates a RenderTexture with a custom pixel scale factor.
+     *  Useful when the device framebuffer resolution differs from AX_CONTENT_SCALE_FACTOR * designSize,
+     *  allowing higher-quality captures without changing global CSF.
+     *  The sprite's contentSize stays in design units (w x h) so existing coordinate math is unchanged.
+     *
+     * @param w Design width in points.
+     * @param h Design height in points.
+     * @param format Pixel format (RGBA8 or RGB8).
+     * @param depthStencilFormat Depth/stencil format.
+     * @param sharedRenderTarget Use shared render target.
+     * @param pixelScale Actual pixels = w * pixelScale (e.g. frameSize.width / SCREEN_WIDTH).
+     */
+    static RenderTexture* create(int w,
+                                 int h,
+                                 backend::PixelFormat format,
+                                 backend::PixelFormat depthStencilFormat,
+                                 bool sharedRenderTarget,
+                                 float pixelScale);
+    bool initWithWidthAndHeight(int w,
+                                int h,
+                                backend::PixelFormat format,
+                                PixelFormat depthStencilFormat,
+                                bool sharedRenderTarget,
+                                float pixelScale);
+
     // Overrides
     virtual void visit(Renderer* renderer, const Mat4& parentTransform, uint32_t parentFlags) override;
 
