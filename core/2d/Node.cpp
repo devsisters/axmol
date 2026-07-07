@@ -105,6 +105,9 @@ Node::Node()
     , _userObject(nullptr)
     , _running(false)
     , _visible(true)
+#if UI_BUILDER
+    , _hidden(false)
+#endif
     , _ignoreAnchorPointForPosition(false)
     , _reorderChildDirty(false)
     , _isTransitionFinished(false)
@@ -617,6 +620,23 @@ void Node::setVisible(bool visible)
             _transformUpdated = _transformDirty = _inverseDirty = true;
     }
 }
+
+#if UI_BUILDER
+void Node::setHidden(bool hidden)
+{
+    if (hidden != _hidden)
+    {
+        _hidden = hidden;
+        if (!_hidden)
+            _transformUpdated = _transformDirty = _inverseDirty = true;
+    }
+}
+
+bool Node::isHidden() const
+{
+    return _hidden;
+}
+#endif
 
 const Vec2& Node::getAnchorPointInPoints() const
 {
@@ -1281,6 +1301,12 @@ void Node::visit(Renderer* renderer, const Mat4& parentTransform, uint32_t paren
     {
         return;
     }
+#if UI_BUILDER
+    if (_hidden)
+    {
+        return;
+    }
+#endif
 
     uint32_t flags = processParentFlags(parentTransform, parentFlags);
 

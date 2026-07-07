@@ -40,6 +40,10 @@
 #include "2d/ComponentContainer.h"
 #include "2d/Component.h"
 
+#ifndef UI_BUILDER
+#    define UI_BUILDER 0
+#endif
+
 #if defined(AX_ENABLE_PHYSICS)
 #    include "physics/PhysicsBody.h"
 #endif
@@ -585,6 +589,11 @@ public:
      * @return true if the node is visible, false if the node is hidden.
      */
     virtual bool isVisible() const;
+
+#if UI_BUILDER
+    void setHidden(bool hidden);
+    bool isHidden() const;
+#endif
 
     /**
      * Sets the rotation (angle) of the node in degrees.
@@ -1968,6 +1977,9 @@ protected:
     bool _reorderChildDirty;             ///< children order dirty flag
     bool _running;                       ///< is running
     bool _visible;                       ///< is this node visible
+#if UI_BUILDER
+    bool _hidden;                        ///< UI Builder editor-only display filter
+#endif
     bool _ignoreAnchorPointForPosition;  ///< true if the Anchor Vec2 will be (0,0) when you position the Node, false
                                          ///< otherwise. Used by Layer and Scene.
 
