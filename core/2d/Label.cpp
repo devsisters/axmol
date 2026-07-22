@@ -2218,6 +2218,12 @@ void Label::updateBlendState()
 
 void Label::visit(Renderer* renderer, const Mat4& parentTransform, uint32_t parentFlags)
 {
+#if UI_BUILDER
+    if (_hidden)
+    {
+        return;
+    }
+#endif
     if (!_visible || (_utf8Text.empty() && _children.empty()))
     {
         return;
