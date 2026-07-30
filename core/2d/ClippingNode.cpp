@@ -136,6 +136,12 @@ void ClippingNode::onExit()
 
 void ClippingNode::visit(Renderer* renderer, const Mat4& parentTransform, uint32_t parentFlags)
 {
+#if UI_BUILDER
+    if (_hidden)
+    {
+        return;
+    }
+#endif
     if (!_visible || !hasContent())
         return;
 
