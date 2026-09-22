@@ -247,6 +247,12 @@ protected:
     hlookup::string_map<Texture2D*> _textures;
 
     static std::string s_etc1AlphaFileSuffix;
+    
+#ifdef _AX_DEBUG
+public:
+    // 메인 스레드에서 새 텍스처가 동기 로드될 때 호출되는 콜백 (비동기 로드 제외)
+    static std::function<void(const std::string&)> onSyncImageLoad;
+#endif
 };
 
 #if AX_ENABLE_CACHE_TEXTURE_DATA

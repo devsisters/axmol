@@ -44,12 +44,20 @@ THE SOFTWARE.
 #include "base/NinePatchImageParser.h"
 #include "renderer/backend/DriverBase.h"
 
+#ifdef _AX_DEBUG
+#include <thread>
+#endif
+
 using namespace std;
 
 namespace ax
 {
 
 std::string TextureCache::s_etc1AlphaFileSuffix = "@alpha";
+
+#ifdef _AX_DEBUG
+std::function<void(const std::string&)> TextureCache::onSyncImageLoad;
+#endif
 
 // implementation TextureCache
 
@@ -441,6 +449,9 @@ Texture2D* TextureCache::addImage(std::string_view path, PixelFormat format)
 {
     Texture2D* texture = nullptr;
     Image* image       = nullptr;
+#ifdef _AX_DEBUG
+    bool newlyLoaded = false;
+#endif
     // Split up directory and filename
     // MUTEX:
     // Needed since addImageAsync calls this method from a different thread
@@ -474,6 +485,9 @@ Texture2D* TextureCache::addImage(std::string_view path, PixelFormat format)
 #endif
                 // texture already retained, no need to re-retain it
                 _textures.emplace(fullpath, texture);
+#ifdef _AX_DEBUG
+                newlyLoaded = true;
+#endif
 
                 //-- ANDROID ETC1 ALPHA SUPPORTS.
                 std::string alphaFullPath{path};
@@ -501,6 +515,15 @@ Texture2D* TextureCache::addImage(std::string_view path, PixelFormat format)
     }
 
     AX_SAFE_RELEASE(image);
+    
+#ifdef _AX_DEBUG
+    // 캐시에 없던 텍스처가 메인 스레드(비동기 로딩 스레드 제외)에서 새로 로드된 경우에만 알림
+    if (newlyLoaded && onSyncImageLoad &&
+        (!_loadingThread || std::this_thread::get_id() != _loadingThread->get_id()))
+    {
+        onSyncImageLoad(fullpath);
+    }
+#endif
 
     return texture;
 }
