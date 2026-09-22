@@ -225,10 +225,19 @@
     {
         [self setupWebView];
     }
-    auto path = [[NSBundle mainBundle] resourcePath];
-    path      = [path stringByAppendingPathComponent:@(baseURL.data())];
-    auto url  = [NSURL fileURLWithPath:path];
-    [self.wkWebView loadHTMLString:@(string.data()) baseURL:url];
+    auto baseString = @(baseURL.data());
+    if ([baseString hasPrefix:@"http://"] || [baseString hasPrefix:@"https://"])
+    {
+        auto url = [NSURL URLWithString:baseString];
+        [self.wkWebView loadHTMLString:@(string.data()) baseURL:url];
+    }
+    else
+    {
+        auto path = [[NSBundle mainBundle] resourcePath];
+        path      = [path stringByAppendingPathComponent:@(baseURL.data())];
+        auto url  = [NSURL fileURLWithPath:path];
+        [self.wkWebView loadHTMLString:@(string.data()) baseURL:url];
+    }
 }
 
 - (void)loadUrl:(std::string_view)urlString cleanCachedData:(BOOL)needCleanCachedData
