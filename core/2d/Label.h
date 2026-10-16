@@ -655,6 +655,7 @@ public:
      */
     float getLineHeight() const;
 
+    /** Additional line spacing in font pixels, matching getLineHeight() and cocos2d. */
     void setLineSpacing(float height);
     float getLineSpacing() const;
 

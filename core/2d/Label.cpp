@@ -1823,7 +1823,7 @@ void Label::updateContent()
             float thickness         = std::max(std::ceil(_lineHeight * _fontScale * 0.12f * 2) / 2.f, 2.f);
             float nextY             = _letterOffsetY;
             auto contentScaleFactor = AX_CONTENT_SCALE_FACTOR();
-            float lineSpacing       = _lineSpacing;
+            float lineSpacing       = _lineSpacing / contentScaleFactor;
             float lineHeight        = _lineHeight * _fontScale / contentScaleFactor;
 
             // atlas font
@@ -2989,7 +2989,7 @@ bool Label::multilineTextWrap(bool breakOnChar, bool ignoreOverflow)
 
     auto contentScaleFactor = AX_CONTENT_SCALE_FACTOR();
 
-    float lineSpacing = _lineSpacing * contentScaleFactor;
+    float lineSpacing = _lineSpacing;
     float highestY    = 0.f;
     float lowestY     = 0.f;
     FontLetterDefinition letterDef;
@@ -3147,7 +3147,7 @@ bool Label::multilineTextWrap(bool breakOnChar, bool ignoreOverflow)
     _textDesiredHeight = (_numberOfLines * _lineHeight * _fontScale) / contentScaleFactor;
 
     if (_numberOfLines > 1)
-        _textDesiredHeight += (_numberOfLines - 1) * _lineSpacing;  // ?? use scaled lineSpacing
+        _textDesiredHeight += (_numberOfLines - 1) * (_lineSpacing / contentScaleFactor);
 
     Vec2 contentSize(_labelWidth, _labelHeight);
 
