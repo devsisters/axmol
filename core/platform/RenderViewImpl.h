@@ -183,6 +183,9 @@ protected:
     void onGLFWCharCallback(GLFWwindow* window, unsigned int character);
     void onGLFWWindowPosCallback(GLFWwindow* windows, int x, int y);
     void onGLFWWindowSizeCallback(GLFWwindow* window, int width, int height);
+#if (AX_TARGET_PLATFORM == AX_PLATFORM_MAC) && defined(AX_USE_METAL)
+    void onGLFWFramebufferSizeCallback(GLFWwindow* window, int width, int height);
+#endif
     void onGLFWWindowIconifyCallback(GLFWwindow* window, int iconified);
     void onGLFWWindowFocusCallback(GLFWwindow* window, int focused);
     void onGLFWWindowCloseCallback(GLFWwindow* window);

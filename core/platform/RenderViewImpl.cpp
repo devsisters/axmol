@@ -167,6 +167,14 @@ public:
             _view->onGLFWWindowSizeCallback(window, width, height);
     }
 
+#if (AX_TARGET_PLATFORM == AX_PLATFORM_MAC) && defined(AX_USE_METAL)
+    static void onGLFWFramebufferSizeCallback(GLFWwindow* window, int width, int height)
+    {
+        if (_view)
+            _view->onGLFWFramebufferSizeCallback(window, width, height);
+    }
+#endif
+
     static void setRenderViewImpl(RenderViewImpl* view) { _view = view; }
 
     static void onGLFWWindowIconifyCallback(GLFWwindow* window, int iconified)
@@ -636,6 +644,9 @@ bool RenderViewImpl::initWithRect(std::string_view viewName, const ax::Rect& rec
     glfwSetKeyCallback(_mainWindow, GLFWEventHandler::onGLFWKeyCallback);
     glfwSetWindowPosCallback(_mainWindow, GLFWEventHandler::onGLFWWindowPosCallback);
     glfwSetWindowSizeCallback(_mainWindow, GLFWEventHandler::onGLFWWindowSizeCallback);
+#if (AX_TARGET_PLATFORM == AX_PLATFORM_MAC) && defined(AX_USE_METAL)
+    glfwSetFramebufferSizeCallback(_mainWindow, GLFWEventHandler::onGLFWFramebufferSizeCallback);
+#endif
     glfwSetWindowIconifyCallback(_mainWindow, GLFWEventHandler::onGLFWWindowIconifyCallback);
     glfwSetWindowFocusCallback(_mainWindow, GLFWEventHandler::onGLFWWindowFocusCallback);
     glfwSetWindowCloseCallback(_mainWindow, GLFWEventHandler::onGLFWWindowCloseCallback);
@@ -1318,6 +1329,30 @@ void RenderViewImpl::onGLFWWindowSizeCallback(GLFWwindow* /*window*/, int w, int
         Director::getInstance()->getEventDispatcher()->dispatchCustomEvent(RenderViewImpl::EVENT_WINDOW_RESIZED, &size);
     }
 }
+
+#if (AX_TARGET_PLATFORM == AX_PLATFORM_MAC) && defined(AX_USE_METAL)
+void RenderViewImpl::onGLFWFramebufferSizeCallback(GLFWwindow* /*window*/, int fbWidth, int fbHeight)
+{
+    // 창의 포인트 크기는 그대로인 채 backing scale만 바뀌는 경우(Retina <-> 비Retina 모니터 이동)에는
+    // window size callback이 호출되지 않으므로 여기서 retina 상태와 drawable 크기를 갱신한다.
+    if (!fbWidth || !fbHeight || _resolutionPolicy == ResolutionPolicy::UNKNOWN)
+        return;
+
+    int w = 0, h = 0;
+    glfwGetWindowSize(_mainWindow, &w, &h);
+
+    bool isInRetinaMonitor = fbWidth == 2 * w && fbHeight == 2 * h;
+    int retinaFactor       = isInRetinaMonitor && !_isRetinaEnabled ? 2 : 1;
+    if (isInRetinaMonitor == _isInRetinaMonitor && retinaFactor == _retinaFactor)
+        return;
+
+    _isInRetinaMonitor = isInRetinaMonitor;
+    _retinaFactor      = retinaFactor;
+
+    backend::UtilsMTL::resizeDefaultAttachmentTexture(fbWidth, fbHeight);
+    updateDesignResolutionSize();
+}
+#endif
 
 void RenderViewImpl::onGLFWWindowIconifyCallback(GLFWwindow* /*window*/, int iconified)
 {
