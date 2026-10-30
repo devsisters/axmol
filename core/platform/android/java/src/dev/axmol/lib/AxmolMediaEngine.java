@@ -207,7 +207,7 @@ public class AxmolMediaEngine extends DefaultRenderersFactory implements Player.
                 mPlayer.prepare();
                 mPlayer.setRepeatMode(mLooping ? Player.REPEAT_MODE_ALL : Player.REPEAT_MODE_OFF);
                 mPlayer.setPlayWhenReady(mAutoPlay);
-                mPlayer.setDeviceMuted(mMuted);
+                mPlayer.setVolume(mMuted ? 0f : 1f);
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
@@ -314,6 +314,11 @@ public class AxmolMediaEngine extends DefaultRenderersFactory implements Player.
 
     public void setMuted(boolean isMuted) {
         mMuted = isMuted;
+        if (mPlayer == null) return;
+        AxmolEngine.runOnUiThread(() -> {
+            if (mPlayer != null)
+                mPlayer.setVolume(isMuted ? 0f : 1f);
+        });
     }
 
     @Override
