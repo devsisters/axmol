@@ -66,7 +66,7 @@ endif()
 set(_GLES_PROFILE 0) # _GLES_PROFILE is the default GLES profile
 
 if(ANDROID) # android force use GLES profile
-  set(_GLES_PROFILE 200)
+  set(_GLES_PROFILE 300)
 elseif(WINRT OR WASM) # winuwp/wasm fore use GLES profile
   set(_GLES_PROFILE 300)
 elseif((NOT MACOSX) AND(NOT LINUX)) # win32, ios, tvos

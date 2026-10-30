@@ -135,7 +135,7 @@ Linux: Desktop GL/Vulkan
 // Windows: use ANGLE GLES
 #ifndef AX_GLES_PROFILE
 #    if defined(__ANDROID__)
-#        define AX_GLES_PROFILE 200
+#        define AX_GLES_PROFILE 300
 #    elif (AX_TARGET_PLATFORM == AX_PLATFORM_WINRT)
 #        define AX_GLES_PROFILE 300
 #    else
