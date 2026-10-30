@@ -370,17 +370,17 @@ class AxmolUtils {
         // Create symlink at sdk cmake when using fallback cmake in axmol engine
         // Only present for compatibility purpose, may remove in future axmol releases
         if (index == (cmakeBinDirs.size() - 1)) {
-            def symlinkDir = joinPath(sdkRoot, 'cmake', buildProfiles['cmakeVer'])
+            def symlinkDir = joinPath(sdkRoot, 'cmake', verifiedVer)
             def symlinkDirFile = new File(symlinkDir)
             if (!symlinkDirFile.exists()) {
-                println "Creating symlink ${symlinkDir} ==> ${fallbackCMakeDir} ..."
+                println "Creating symlink ${symlinkDir} ==> ${new File(fallbackCMakeDir).parent} ..."
 
                 def parentDir = symlinkDirFile.parentFile
                 if(!parentDir.exists()) {
                     parentDir.mkdirs()
                 }
 
-                createSymbolicLink(symlinkDirFile, new File(fallbackCMakeDir))
+                createSymbolicLink(symlinkDirFile, new File(fallbackCMakeDir).parentFile)
             } else {
                 println "The symlinkd ${symlinkDir} ==> ${fallbackCMakeDir} exist"
             }
