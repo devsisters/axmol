@@ -89,8 +89,10 @@ bool ProgramManager::init()
     // load compiled shader from exeDir/axslc
     auto axslcDir = joinPath(fileUtils->getAppRoot(), "axslc"sv);
     fileUtils->addSearchPath(axslcDir);
+    fileUtils->addSearchPath(joinPath(axslcDir, "/custom"sv));
 #else  // APPLE, ANDROID, WINRT
     fileUtils->addSearchPath("axslc"sv);
+    fileUtils->addSearchPath("axslc/custom"sv);
 #endif
 
     registerProgram(ProgramType::POSITION_TEXTURE_COLOR, positionTextureColor_vert, positionTextureColor_frag,
