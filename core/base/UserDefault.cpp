@@ -71,6 +71,10 @@ std::string UserDefault::_userDefaultFileName = "UserDefault.bin";
 std::string UserDefault::_userDefaultFileName = "UserDefault.xml";
 #endif
 
+#if AX_TARGET_PLATFORM == AX_PLATFORM_IOS || AX_TARGET_PLATFORM == AX_PLATFORM_MAC || AX_TARGET_PLATFORM == AX_PLATFORM_ANDROID
+UserDefault* createPlatformUserDefault();
+#endif
+
 static void ud_setkey(std::string& lhs, const cxx17::string_view& rhs)
 {
     static const size_t keyLen = 16;
@@ -346,13 +350,13 @@ void UserDefault::setStringForKey(const char* pKey, std::string_view value)
 void UserDefault::setDataForKey(const char* pKey, const Data& value)
 {
     // ignore empty key
-    if (!pKey || value.isNull())
+    if (!pKey || !*pKey || value.isNull())
     {
         return;
     }
 
-//    setValueForKey(pKey, value.);
-
+    // 바이너리는 length-prefix(write_v)로 저장되므로 string 경로를 그대로 사용해도 안전하다
+    setStringForKey(pKey, std::string_view(reinterpret_cast<const char*>(value.getBytes()), value.getSize()));
 }
 
 void UserDefault::setValueForKey(std::string_view key, std::string_view value)
@@ -377,7 +381,13 @@ UserDefault* UserDefault::getInstance()
     if (_userDefault)
         return _userDefault;
 
+#if AX_TARGET_PLATFORM == AX_PLATFORM_IOS || AX_TARGET_PLATFORM == AX_PLATFORM_MAC || AX_TARGET_PLATFORM == AX_PLATFORM_ANDROID
+    // Cocos 시절 저장소(NSUserDefaults / SharedPreferences)를 그대로 사용
+    // (platform/apple/UserDefault-apple.mm, platform/android/UserDefault-android.cpp)
+    return (_userDefault = createPlatformUserDefault());
+#else
     return (_userDefault = new UserDefault());
+#endif
 }
 
 void UserDefault::destroyInstance()
