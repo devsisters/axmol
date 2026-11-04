@@ -44,15 +44,15 @@ Animation::Animation(const String &name, Vector<Timeline *> &timelines, float du
 																						  _name(name) {
 	assert(_name.length() > 0);
 	for (size_t i = 0; i < timelines.size(); i++) {
-		Vector<PropertyId> propertyIds = timelines[i]->getPropertyIds();
+		Vector<PropertyId> &propertyIds = timelines[i]->getPropertyIds();
 		for (size_t ii = 0; ii < propertyIds.size(); ii++)
-			_timelineIds.put(propertyIds[ii], true);
+			_timelineIds.insert(propertyIds[ii]);
 	}
 }
 
 bool Animation::hasTimeline(Vector<PropertyId> &ids) {
 	for (size_t i = 0; i < ids.size(); i++) {
-		if (_timelineIds.containsKey(ids[i])) return true;
+		if (_timelineIds.count(ids[i])) return true;
 	}
 	return false;
 }

@@ -37,6 +37,7 @@
 #include <spine/SpineObject.h>
 #include <spine/SpineString.h>
 #include <spine/Property.h>
+#include <unordered_set>
 
 namespace spine {
 	class Timeline;
@@ -122,7 +123,7 @@ namespace spine {
 		static int search(Vector<float> &values, float target, int step);
 	private:
 		Vector<Timeline *> _timelines;
-		HashMap<PropertyId, bool> _timelineIds;
+        std::unordered_set<PropertyId> _timelineIds;
 		float _duration;
 		String _name;
 	};

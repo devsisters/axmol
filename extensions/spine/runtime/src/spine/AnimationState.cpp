@@ -1053,6 +1053,15 @@ void AnimationState::animationsChanged() {
 	}
 }
 
+// HashMap 은 연결 리스트라 timeline 이 많은 스켈레톤에서 computeHold 가 제곱으로 늘어난다.
+static bool addPropertyIds(std::unordered_set<PropertyId> &set, Vector<PropertyId> &ids) {
+    bool added = false;
+    for (size_t i = 0; i < ids.size(); i++) {
+        if (set.insert(ids[i]).second) added = true;
+    }
+    return added;
+}
+
 void AnimationState::computeHold(TrackEntry *entry) {
 	TrackEntry *to = entry->_mixingTo;
 	Vector<Timeline *> &timelines = entry->_animation->_timelines;
@@ -1064,7 +1073,7 @@ void AnimationState::computeHold(TrackEntry *entry) {
 
 	if (to != NULL && to->_holdPrevious) {
 		for (size_t i = 0; i < timelinesCount; i++) {
-			timelineMode[i] = _propertyIDs.addAll(timelines[i]->getPropertyIds(), true) ? HoldFirst : HoldSubsequent;
+			timelineMode[i] = addPropertyIds(_propertyIDs, timelines[i]->getPropertyIds()) ? HoldFirst : HoldSubsequent;
 		}
 		return;
 	}
@@ -1075,7 +1084,7 @@ continue_outer:
 	for (; i < timelinesCount; ++i) {
 		Timeline *timeline = timelines[i];
 		Vector<PropertyId> &ids = timeline->getPropertyIds();
-		if (!_propertyIDs.addAll(ids, true)) {
+        if (!addPropertyIds(_propertyIDs, ids)) {
 			timelineMode[i] = Subsequent;
 		} else {
 			if (to == NULL || timeline->getRTTI().isExactly(AttachmentTimeline::rtti) ||

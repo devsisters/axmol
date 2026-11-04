@@ -38,6 +38,7 @@
 #include <spine/SpineString.h>
 #include <spine/HasRendererObject.h>
 #include "Slot.h"
+#include <unordered_set>
 
 #ifdef SPINE_USE_STD_FUNCTION
 #include <functional>
@@ -470,7 +471,7 @@ namespace spine {
 		Vector<Event *> _events;
 		EventQueue *_queue;
 
-		HashMap<PropertyId, bool> _propertyIDs;
+        std::unordered_set<PropertyId> _propertyIDs;
 		bool _animationsChanged;
 
 		AnimationStateListener _listener;
