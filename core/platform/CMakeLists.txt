@@ -29,6 +29,7 @@ if(ANDROID)
     platform/android/Common-android.cpp
     platform/android/RenderViewImpl-android.cpp
     platform/android/FileUtils-android.cpp
+    platform/android/UserDefault-android.cpp
   )
 elseif(WINDOWS)
   if(NOT WINRT)
@@ -60,6 +61,7 @@ elseif(APPLE)
   set(_AX_PLATFORM_SPECIFIC_SRC
     platform/apple/FileUtils-apple.mm
     platform/apple/Device-apple.mm
+    platform/apple/UserDefault-apple.mm
   )
 
   if(MACOSX)

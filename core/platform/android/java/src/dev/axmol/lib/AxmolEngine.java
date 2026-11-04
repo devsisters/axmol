@@ -90,7 +90,7 @@ public class AxmolEngine {
     // ===========================================================
     // Constants
     // ===========================================================
-    private static final String PREFS_NAME = "AXPrefsFile";
+    private static final String PREFS_NAME = "Cocos2dxPrefsFile"; // Cocos 시절 UserDefault 값을 읽기 위해 이름 유지
     private static final int RUNNABLES_PER_FRAME = 5;
     private static final String TAG = AxmolEngine.class.getSimpleName();
 
