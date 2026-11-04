@@ -31,6 +31,9 @@
 #include "2d/ActionTween.h"
 #include "extensions/ExtensionMacros.h"
 #include "extensions/ExtensionExport.h"
+#include <chrono>
+#include <utility>
+#include <vector>
 
 /**
  * @addtogroup ui
@@ -362,6 +365,23 @@ protected:
      * scroll speed
      */
     Vec2 _scrollDistance;
+    
+    /** 터치 이동 한 번의 거리를 이력에 남긴다. 손을 뗄 때 관성 속도를 이 이력으로 구한다. */
+    void recordTouchMove(const Vec2& distance);
+    /** 손을 떼기 직전 짧은 구간의 이동으로 초당 속도를 구한다. 멈춘 채 떼면 0 이다. */
+    Vec2 computeReleaseVelocity() const;
+    /** dt 동안 관성으로 움직일 거리를 돌려주고 속도를 줄인다. rateAt60fps 는 1/60초마다 곱하는 감속률이다. */
+    Vec2 stepFlingVelocity(float dt, float rateAt60fps);
+    /** 관성 속도가 1/60초에 minDistance 이하로 움직일 만큼 줄었는가 */
+    bool isFlingSlowerThan(float minDistance) const;
+    /** 관성으로 from 에서 step 만큼 갈 때 스크롤 방향의 경계(minInset~maxInset)를 넘는 부분을 잘라 도착 위치를 돌려준다. */
+    Vec2 limitFlingTarget(const Vec2& from, const Vec2& step, const Vec2& minInset, const Vec2& maxInset) const;
+    /** 관성 속도와 터치 이동 이력을 비운다. 진행 중인 관성은 다음 감속 호출에서 멈춘다. */
+    void clearFling();
+
+    std::vector<std::pair<std::chrono::steady_clock::time_point, Vec2>> _touchMoveHistory;
+    /** 관성 속도(초당 거리) */
+    Vec2 _flingVelocity;
     /**
      * Touch point
      */

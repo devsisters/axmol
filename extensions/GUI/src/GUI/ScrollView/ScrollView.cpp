@@ -34,11 +34,15 @@
 #include "renderer/Renderer.h"
 
 #include <algorithm>
+#include <cmath>
 
 NS_AX_EXT_BEGIN
 
 #define SCROLL_DEACCEL_RATE 0.95f
 #define SCROLL_DEACCEL_DIST 1.0f
+// 관성 속도를 구할 때 볼 최근 터치 이동 구간과 최대 속도(초당 거리)
+#define FLING_VELOCITY_WINDOW_SECONDS 0.1f
+#define FLING_MAX_VELOCITY            8000.0f
 #define BOUNCE_DURATION 0.15f
 #define INSET_RATIO 0.2f
 #define MOVE_INCH 7.0f / 160.0f
@@ -479,7 +483,108 @@ Vec2 ScrollView::minContainerOffset()
     return Vec2(offsetX, offsetY);
 }
 
-void ScrollView::deaccelerateScrolling(float /*dt*/)
+void ScrollView::recordTouchMove(const Vec2& distance)
+{
+    const auto now = std::chrono::steady_clock::now();
+    _touchMoveHistory.emplace_back(now, distance);
+    // 속도 계산에는 마지막 구간만 쓰므로 그보다 오래된 이동은 하나만 남기고 버린다(구간 시작 시각용).
+    const auto window = std::chrono::duration<float>(FLING_VELOCITY_WINDOW_SECONDS);
+    size_t firstKeep = 0;
+    while (firstKeep + 1 < _touchMoveHistory.size() && now - _touchMoveHistory[firstKeep + 1].first > window)
+    {
+        ++firstKeep;
+    }
+    if (firstKeep > 0)
+    {
+        _touchMoveHistory.erase(_touchMoveHistory.begin(), _touchMoveHistory.begin() + firstKeep);
+    }
+}
+
+Vec2 ScrollView::computeReleaseVelocity() const
+{
+    // 터치 이벤트는 기기마다 한 프레임에 여러 번 오거나, 손을 뗄 때 거의 0인 이동이 마지막으로 온다.
+    // 마지막 이동 한 번이 아니라 최근 구간에 실제로 움직인 거리를 걸린 시간으로 나눈다.
+    if (_touchMoveHistory.empty())
+    {
+        return Vec2::ZERO;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    const auto window = std::chrono::duration<float>(FLING_VELOCITY_WINDOW_SECONDS);
+    Vec2 moved;
+    auto windowStart = now;
+    for (auto it = _touchMoveHistory.rbegin(); it != _touchMoveHistory.rend(); ++it)
+    {
+        if (now - it->first > window)
+        {
+            // 구간 앞에서 멈춰 있던 시간까지 나누면 손을 떼기 직전의 빠른 이동이 묻히므로 구간 시작에서 자른다.
+            windowStart = std::max(it->first, now - std::chrono::duration_cast<std::chrono::steady_clock::duration>(window));
+            break;
+        }
+        moved += it->second;
+        windowStart = it->first;
+    }
+    const float seconds = std::max(std::chrono::duration<float>(now - windowStart).count(), 1.0f / 60.0f);
+    Vec2 velocity = moved / seconds;
+    const float speed = velocity.length();
+    if (speed > FLING_MAX_VELOCITY)
+    {
+        velocity *= FLING_MAX_VELOCITY / speed;
+    }
+    return velocity;
+}
+
+Vec2 ScrollView::stepFlingVelocity(float dt, float rateAt60fps)
+{
+    // 프레임이 밀려 dt 가 길어져도 1/60초씩 나눠 감속한 것과 같은 거리를 가도록 1/60초 이동량의 등비급수 합으로 구한다.
+    const float frames = dt * 60.0f;
+    const float decay = powf(rateAt60fps, frames);
+    const float travelFrames = rateAt60fps < 1.0f ? (1.0f - decay) / (1.0f - rateAt60fps) : frames;
+    const Vec2 step = _flingVelocity / 60.0f * travelFrames;
+    _flingVelocity *= decay;
+    return step;
+}
+
+bool ScrollView::isFlingSlowerThan(float minDistance) const
+{
+    return fabsf(_flingVelocity.x) / 60.0f <= minDistance && fabsf(_flingVelocity.y) / 60.0f <= minDistance;
+}
+
+Vec2 ScrollView::limitFlingTarget(const Vec2& from, const Vec2& step, const Vec2& minInset, const Vec2& maxInset) const
+{
+    // 프레임이 밀려 한 번에 크게 움직여도 경계 밖 빈 곳이 드러나지 않게 경계에서 멈춘다. 이미 경계 밖이면 더 밀지 않는다.
+    Vec2 target = from + step;
+    if (_direction == Direction::BOTH || _direction == Direction::HORIZONTAL)
+    {
+        if (step.x > 0 && target.x > maxInset.x)
+        {
+            target.x = std::max(maxInset.x, from.x);
+        }
+        else if (step.x < 0 && target.x < minInset.x)
+        {
+            target.x = std::min(minInset.x, from.x);
+        }
+    }
+    if (_direction == Direction::BOTH || _direction == Direction::VERTICAL)
+    {
+        if (step.y > 0 && target.y > maxInset.y)
+        {
+            target.y = std::max(maxInset.y, from.y);
+        }
+        else if (step.y < 0 && target.y < minInset.y)
+        {
+            target.y = std::min(minInset.y, from.y);
+        }
+    }
+    return target;
+}
+
+void ScrollView::clearFling()
+{
+    _touchMoveHistory.clear();
+    _flingVelocity.setZero();
+}
+
+void ScrollView::deaccelerateScrolling(float dt)
 {
     if (_dragging)
     {
@@ -489,8 +594,10 @@ void ScrollView::deaccelerateScrolling(float /*dt*/)
 
     float newX, newY;
     Vec2 maxInset, minInset;
-
-    _container->setPosition(_container->getPosition() + _scrollDistance);
+    
+    const Vec2 step = stepFlingVelocity(dt, SCROLL_DEACCEL_RATE);
+    // getScrollDistance() 로 멈춤을 판정하는 곳은 1/60초 이동량을 기대하므로 감속한 속도를 그 단위로 남긴다.
+    _scrollDistance = _flingVelocity / 60.0f;
 
     if (_bounceable)
     {
@@ -502,14 +609,15 @@ void ScrollView::deaccelerateScrolling(float /*dt*/)
         maxInset = this->maxContainerOffset();
         minInset = this->minContainerOffset();
     }
+    
+    _container->setPosition(limitFlingTarget(_container->getPosition(), step, minInset, maxInset));
 
     newX = _container->getPosition().x;
     newY = _container->getPosition().y;
 
-    _scrollDistance = _scrollDistance * SCROLL_DEACCEL_RATE;
     this->setContentOffset(Vec2(newX, newY));
 
-    if ((fabsf(_scrollDistance.x) <= SCROLL_DEACCEL_DIST && fabsf(_scrollDistance.y) <= SCROLL_DEACCEL_DIST) ||
+    if (isFlingSlowerThan(SCROLL_DEACCEL_DIST) ||
         ((_direction == Direction::BOTH || _direction == Direction::VERTICAL) &&
          (newY >= maxInset.y || newY <= minInset.y)) ||
         ((_direction == Direction::BOTH || _direction == Direction::HORIZONTAL) &&
@@ -778,6 +886,8 @@ bool ScrollView::onTouchBegan(Touch* touch, Event* /*event*/)
         _touchMoved = false;
         _dragging   = true;  // dragging started
         _scrollDistance.setZero();
+        _touchMoveHistory.clear();
+        _flingVelocity.setZero();
         _touchLength = 0.0f;
     }
     else if (_touches.size() == 2)
@@ -881,6 +991,7 @@ void ScrollView::onTouchMoved(Touch* touch, Event* /*event*/)
                 newY = _container->getPosition().y + moveDistance.y;
 
                 _scrollDistance = moveDistance;
+                recordTouchMove(moveDistance);
                 this->setContentOffset(Vec2(newX, newY));
             }
         }
@@ -911,6 +1022,7 @@ void ScrollView::onTouchEnded(Touch* touch, Event* /*event*/)
     {
         if (_touches.size() == 1 && _touchMoved)
         {
+            _flingVelocity = computeReleaseVelocity();
             this->schedule(AX_SCHEDULE_SELECTOR(ScrollView::deaccelerateScrolling));
         }
         _touches.erase(touchIter);
