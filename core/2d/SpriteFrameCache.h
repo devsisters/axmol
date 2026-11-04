@@ -264,7 +264,8 @@ public:
 #endif
     
     void setFrameAdder(std::function<void(std::string_view)> adder) { _frameAdder = adder; }
-    void removeUnusedPlists();
+    // 현재 _frameAdder. 임시 교체 후 복원용. Added by Beomsuk Kim, Devsisters.
+    const std::function<void(std::string_view)>& getFrameAdder() const { return _frameAdder; }
     void setDefaultFrame(SpriteFrame* frame);
 
 protected:

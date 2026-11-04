@@ -50,6 +50,8 @@ namespace ax
 
 static SpriteFrameCache* _sharedSpriteFrameCache = nullptr;
 
+static constexpr std::string_view NON_PACKED_IMAGE_SHEET_PATH = "by#addSpriteFrame()";
+
 static uint64_t computeHash(const std::string_view& v)
 {
     return XXH64(v.data(), v.length(), 0);
@@ -138,7 +140,7 @@ void SpriteFrameCache::addSpriteFrame(SpriteFrame* frame, std::string_view frame
 {
     AXASSERT(frame, "frame should not be nil");
 
-    const auto name = computeHash("by#addSpriteFrame()");
+    const auto name = computeHash(NON_PACKED_IMAGE_SHEET_PATH);
     auto&& itr      = _spriteSheets.find(name);
     if (itr != _spriteSheets.end())
     {
@@ -147,7 +149,7 @@ void SpriteFrameCache::addSpriteFrame(SpriteFrame* frame, std::string_view frame
     else
     {
         auto spriteSheet  = std::make_shared<SpriteSheet>();
-        spriteSheet->path = name;
+        spriteSheet->path = NON_PACKED_IMAGE_SHEET_PATH;
         insertFrame(spriteSheet, frameName, frame);
     }
 }
@@ -184,8 +186,25 @@ void SpriteFrameCache::removeUnusedSpriteFrames()
 void SpriteFrameCache::removeUnusedSpriteSheets()
 {
     std::vector<uint64_t> willRemoveSpriteSheetFileNames;
+    std::vector<uint64_t> unusedNonPackedFrames;
+    const auto nonPackedSheetId = computeHash(NON_PACKED_IMAGE_SHEET_PATH);
     for (auto&& it : _spriteSheets)
     {
+        if (it.first == nonPackedSheetId)
+        {
+            // addSpriteFrame()으로 넣은 비패킹 프레임은 시트 단위가 아니라 프레임 단위로 판정한다.
+            for (auto&& frame : it.second->frames)
+            {
+                auto spriteFrame = findFrame(frame);
+                if (spriteFrame && spriteFrame->getReferenceCount() == 1)
+                {
+                    spriteFrame->getTexture()->removeSpriteFrameCapInset(spriteFrame);
+                    unusedNonPackedFrames.push_back(frame);
+                }
+            }
+            continue;
+        }
+
         bool isUsed = false;
         for (auto&& frame : it.second->frames)
         {
@@ -206,6 +225,8 @@ void SpriteFrameCache::removeUnusedSpriteSheets()
         AXLOGD("SpriteFrameCache: removing unused sprite sheet file : {}", sheetId);
         removeSpriteSheet(sheetId);
     }
+
+    eraseFrames(unusedNonPackedFrames);
 }
 
 void SpriteFrameCache::removeSpriteFrameByName(std::string_view name)
