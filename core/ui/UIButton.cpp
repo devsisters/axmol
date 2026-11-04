@@ -271,11 +271,12 @@ void Button::loadTextureNormal(std::string_view normal, TextureResType texType)
     bool textureLoaded = true;
     if (normal.empty())
     {
-        _buttonNormalRenderer->resetRender();
+        _buttonNormalRenderer->setVisible(false);
         textureLoaded = false;
     }
     else
     {
+        _buttonNormalRenderer->setVisible(true);
         switch (texType)
         {
         case TextureResType::LOCAL:
@@ -330,7 +331,7 @@ void Button::loadTexturePressed(std::string_view selected, TextureResType texTyp
     bool textureLoaded = true;
     if (selected.empty())
     {
-        _buttonClickedRenderer->resetRender();
+        _buttonClickedRenderer->setVisible(false);
         textureLoaded = false;
     }
     else
@@ -373,7 +374,7 @@ void Button::loadTextureDisabled(std::string_view disabled, TextureResType texTy
     bool textureLoaded = true;
     if (disabled.empty())
     {
-        _buttonDisabledRenderer->resetRender();
+        _buttonDisabledRenderer->setVisible(false);
         textureLoaded = false;
     }
     else
@@ -469,7 +470,7 @@ const Rect& Button::getCapInsetsDisabledRenderer() const
 
 void Button::onPressStateChangedToNormal()
 {
-    _buttonNormalRenderer->setVisible(true);
+    _buttonNormalRenderer->setVisible(_normalTextureLoaded);
     _buttonClickedRenderer->setVisible(false);
     _buttonDisabledRenderer->setVisible(false);
     _buttonNormalRenderer->setState(Scale9Sprite::State::NORMAL);
@@ -548,8 +549,8 @@ void Button::onPressStateChangedToPressed()
     }
     else
     {
-        _buttonNormalRenderer->setVisible(true);
-        _buttonClickedRenderer->setVisible(true);
+        _buttonNormalRenderer->setVisible(_normalTextureLoaded);
+        _buttonClickedRenderer->setVisible(_pressedTextureLoaded);
         _buttonDisabledRenderer->setVisible(false);
 
         _buttonNormalRenderer->stopAllActions();
@@ -952,7 +953,7 @@ void Button::resetNormalRender()
     _normalTextureLoaded     = false;
     _normalTextureAdaptDirty = false;
 
-    _buttonNormalRenderer->resetRender();
+    _buttonNormalRenderer->setVisible(false);
 }
 void Button::resetPressedRender()
 {
@@ -964,7 +965,7 @@ void Button::resetPressedRender()
     _pressedTextureLoaded     = false;
     _pressedTextureAdaptDirty = false;
 
-    _buttonClickedRenderer->resetRender();
+    _buttonClickedRenderer->setVisible(false);
 }
 
 void Button::resetDisabledRender()
@@ -977,7 +978,7 @@ void Button::resetDisabledRender()
     _disabledTextureLoaded     = false;
     _disabledTextureAdaptDirty = false;
 
-    _buttonDisabledRenderer->resetRender();
+    _buttonDisabledRenderer->setVisible(false);
 }
 
 ResourceData Button::getNormalFile()

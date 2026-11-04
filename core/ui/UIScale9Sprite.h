@@ -531,8 +531,6 @@ public:
      */
     Rect getCapInsets() const;
 
-    void resetRender();
-
 protected:
     void updateCapInset();
     void setupSlice9(Texture2D* texture, const Rect& capInsets);

@@ -163,10 +163,11 @@ void Slider::loadBarTexture(std::string_view fileName, TextureResType texType)
     _barTexType  = texType;
     if (fileName.empty())
     {
-        _barRenderer->resetRender();
+        _barRenderer->setVisible(false);
     }
     else
     {
+        _barRenderer->setVisible(true);
         switch (_barTexType)
         {
         case TextureResType::LOCAL:
@@ -208,10 +209,11 @@ void Slider::loadProgressBarTexture(std::string_view fileName, TextureResType te
     _progressBarTexType     = texType;
     if (fileName.empty())
     {
-        _progressBarRenderer->resetRender();
+        _progressBarRenderer->setVisible(false);
     }
     else
     {
+        _progressBarRenderer->setVisible(true);
         switch (_progressBarTexType)
         {
         case TextureResType::LOCAL:
