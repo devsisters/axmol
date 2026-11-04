@@ -721,11 +721,7 @@ void Texture2D::removeSpriteFrameCapInset(SpriteFrame* spriteFrame)
 {
     if (nullptr != this->_ninePatchInfo)
     {
-        auto capInsetMap = this->_ninePatchInfo->capInsetMap;
-        if (capInsetMap.find(spriteFrame) != capInsetMap.end())
-        {
-            capInsetMap.erase(spriteFrame);
-        }
+        this->_ninePatchInfo->capInsetMap.erase(spriteFrame);
     }
 }
 
