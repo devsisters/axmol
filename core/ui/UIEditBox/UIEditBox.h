@@ -88,7 +88,7 @@ public:
      * This method is called when the return button was pressed or the outside area of keyboard was touched.
      * @param editBox The edit box object that generated the event.
      */
-    virtual void editBoxReturn(EditBox* editBox) = 0;
+    virtual void editBoxReturn(EditBox* editBox) {}
     
     /**
      * This method is called when an edit box loses focus after keyboard is hidden.
@@ -647,6 +647,8 @@ public:
 
     void openKeyboard() const;
     void closeKeyboard() const;
+    
+    void connectNextEditBox(EditBox* editBox);
 
 protected:
     virtual void releaseUpEvent() override;

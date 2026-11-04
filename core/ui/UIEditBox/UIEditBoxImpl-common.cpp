@@ -331,6 +331,22 @@ void EditBoxImplCommon::setGlobalZOrder(float globalZOrder)
         _labelPlaceHolder->setGlobalZOrder(globalZOrder);
     }
 }
+    
+void EditBoxImplCommon::connectNextEditBox(EditBoxImpl* nextEditBox)
+{
+    if (nextEditBox != nullptr)
+    {
+        nextEditBox->setPrevEditBox(this);
+    }
+    _nextEditBox = nextEditBox;
+}
+
+void EditBoxImplCommon::scheduleOpenKeyboard()
+{
+    getEditBox()->scheduleOnce([this](float){
+        openKeyboard();
+    }, 0.f, "EditBoxImplCommon::scheduleOpenKeyboard");
+}
 
 void EditBoxImplCommon::draw(Renderer* /*renderer*/, const Mat4& /*transform*/, uint32_t flags)
 {
@@ -424,6 +440,34 @@ void EditBoxImplCommon::editBoxEditingDidEnd(std::string_view text, EditBoxDeleg
     {
         this->onEndEditing(_text);
     }
+    
+    if (_editBox != nullptr)
+    {
+        this->onEndEditing(_text);
+        
+        switch (action)
+        {
+            case EditBoxDelegate::EditBoxEndAction::TAB_TO_NEXT:
+            {
+                if (_nextEditBox)
+                {
+                    _nextEditBox->scheduleOpenKeyboard();
+                }
+                break;
+            }
+            case EditBoxDelegate::EditBoxEndAction::TAB_TO_PREVIOUS:
+            {
+                if (_prevEditBox)
+                {
+                    _prevEditBox->scheduleOpenKeyboard();
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
 }
 
 void EditBoxImplCommon::editBoxEditingChanged(std::string_view text)

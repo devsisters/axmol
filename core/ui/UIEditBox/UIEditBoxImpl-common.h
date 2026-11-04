@@ -92,6 +92,8 @@ public:
     virtual void setAnchorPoint(const Vec2& anchorPoint) override {}
     virtual void setPosition(const Vec2& pos) override {}
     virtual void setGlobalZOrder(float globalZOrder) override;
+    virtual void connectNextEditBox(EditBoxImpl* editBox) override;
+    virtual void scheduleOpenKeyboard() override;
 
     /**
      * @lua NA

@@ -62,6 +62,15 @@ void EditBox::closeKeyboard() const
 {
     _editBoxImpl->closeKeyboard();
 }
+    
+void EditBox::connectNextEditBox(EditBox *editBox)
+{
+    if (_editBoxImpl != nullptr)
+    {
+        auto impl = editBox ? editBox->_editBoxImpl : nullptr;
+        _editBoxImpl->connectNextEditBox(impl);
+    }
+}
 
 EditBox* EditBox::create(const Vec2& size, std::string_view normalImage, TextureResType texType)
 {
@@ -203,11 +212,12 @@ void EditBox::loadTextureNormal(std::string_view normal, TextureResType texType)
     bool textureLoaded = true;
     if (normal.empty())
     {
-        _normalRenderer->resetRender();
+        _normalRenderer->setVisible(false);
         textureLoaded = false;
     }
     else
     {
+        _normalRenderer->setVisible(true);
         switch (texType)
         {
         case TextureResType::LOCAL:
@@ -251,7 +261,7 @@ void EditBox::loadTexturePressed(std::string_view pressed, TextureResType texTyp
     bool textureLoaded = true;
     if (pressed.empty())
     {
-        _pressedRenderer->resetRender();
+        _pressedRenderer->setVisible(false);
         textureLoaded = false;
     }
     else
@@ -294,7 +304,7 @@ void EditBox::loadTextureDisabled(std::string_view disabled, TextureResType texT
     bool textureLoaded = true;
     if (disabled.empty())
     {
-        _disabledRenderer->resetRender();
+        _disabledRenderer->setVisible(false);
         textureLoaded = false;
     }
     else
@@ -372,7 +382,7 @@ const Rect& EditBox::getCapInsetsDisabledRenderer() const
 
 void EditBox::onPressStateChangedToNormal()
 {
-    _normalRenderer->setVisible(true);
+    _normalRenderer->setVisible(_normalTextureLoaded);
     _pressedRenderer->setVisible(false);
     _disabledRenderer->setVisible(false);
     _normalRenderer->setState(Scale9Sprite::State::NORMAL);
@@ -390,8 +400,8 @@ void EditBox::onPressStateChangedToPressed()
     }
     else
     {
-        _normalRenderer->setVisible(true);
-        _pressedRenderer->setVisible(true);
+        _normalRenderer->setVisible(_normalTextureLoaded);
+        _pressedRenderer->setVisible(_pressedTextureLoaded);
         _disabledRenderer->setVisible(false);
     }
 }

@@ -40,7 +40,11 @@ class AX_GUI_DLL EditBoxImpl
 public:
     /**
      */
-    EditBoxImpl(EditBox* pEditBox) : _delegate(nullptr), _editBox(pEditBox) {}
+    EditBoxImpl(EditBox* pEditBox)
+    : _delegate(nullptr)
+    , _editBox(pEditBox)
+    , _prevEditBox(nullptr)
+    , _nextEditBox(nullptr) {}
     /**
      * @lua NA
      */
@@ -88,6 +92,9 @@ public:
     virtual void setAnchorPoint(const Vec2& anchorPoint) = 0;
 
     virtual void setGlobalZOrder(float globalZOrder) = 0;
+    
+    virtual void connectNextEditBox(EditBoxImpl* editBox) = 0;
+    virtual void scheduleOpenKeyboard() = 0;
 
     /**
      * check the editbox's position, update it when needed
@@ -106,9 +113,16 @@ public:
     EditBoxDelegate* getDelegate() { return _delegate; };
     EditBox* getEditBox() { return _editBox; };
 
+    EditBoxImpl* getPrevEditBox() const { return _prevEditBox; }
+    EditBoxImpl* getNextEditBox() const { return _nextEditBox; }
+    
+    void setPrevEditBox(EditBoxImpl* impl) { _prevEditBox = impl; }
+    void setNextEditBox(EditBoxImpl* impl) { _nextEditBox = impl; }
 protected:
     EditBoxDelegate* _delegate;
     EditBox* _editBox;
+    EditBoxImpl* _prevEditBox;
+    EditBoxImpl* _nextEditBox;
 };
 
 // This method must be implemented at each subclass of EditBoxImpl.
