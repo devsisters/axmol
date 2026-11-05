@@ -153,6 +153,12 @@ void RenderView::updateDesignResolutionSize()
             _designResolutionSize.height = ceilf(_screenSize.height / _scaleY);
         }
 
+        else if (_resolutionPolicy == ResolutionPolicy::FREE_RESOLUTION)
+        {
+            _scaleX = _scaleY = 1.f;
+            _designResolutionSize = _screenSize;
+        }
+
         // calculate the rect of viewport
         float viewPortW = _designResolutionSize.width * _scaleX;
         float viewPortH = _designResolutionSize.height * _scaleY;

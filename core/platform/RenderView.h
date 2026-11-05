@@ -68,6 +68,10 @@ enum class ResolutionPolicy
      * aspect ratios.
      */
     FIXED_WIDTH,
+    /** The design resolution always equals the window (frame) size and the scale is 1.
+     * The application is responsible for laying itself out when the window is resized.
+     */
+    FREE_RESOLUTION,
 
     UNKNOWN,
 };
