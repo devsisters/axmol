@@ -49,10 +49,13 @@ public:
     void setInverted(bool inverted);
     bool isInverted() const;
     float getAlphaThreshold() const;
+    static float getActiveMaskAlphaThreshold();
 
 private:
     AX_DISALLOW_COPY_AND_ASSIGN(StencilStateManager);
     static int s_layer;
+    static float s_maskAlphaThreshold;
+    float _previousMaskAlphaThreshold = 1.f;
     /**draw fullscreen quad to clear stencil bits
      */
     void drawFullScreenQuadClearStencil(float globalZOrder);

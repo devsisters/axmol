@@ -33,6 +33,12 @@ namespace ax
 {
 
 int StencilStateManager::s_layer = -1;
+float StencilStateManager::s_maskAlphaThreshold = 1.f;
+
+float StencilStateManager::getActiveMaskAlphaThreshold()
+{
+    return s_maskAlphaThreshold;
+}
 
 StencilStateManager::StencilStateManager()
 {
@@ -157,6 +163,8 @@ void StencilStateManager::onBeforeDrawQuadCmd()
 
 void StencilStateManager::onAfterDrawQuadCmd()
 {
+    _previousMaskAlphaThreshold = s_maskAlphaThreshold;
+    s_maskAlphaThreshold = _alphaThreshold;
     auto renderer = Director::getInstance()->getRenderer();
     renderer->setStencilCompareFunction(backend::CompareFunction::NEVER, _currentLayerMask, _currentLayerMask);
 
@@ -166,6 +174,7 @@ void StencilStateManager::onAfterDrawQuadCmd()
 
 void StencilStateManager::onAfterDrawStencil()
 {
+    s_maskAlphaThreshold = _previousMaskAlphaThreshold;
     // restore the depth test state
     //    glDepthMask(_currentDepthWriteMask);
     auto renderer = Director::getInstance()->getRenderer();

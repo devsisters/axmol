@@ -24,6 +24,7 @@
  */
 
 #include "2d/DrawNode.h"
+#include "base/StencilStateManager.h"
 #include <stddef.h>
 #include "base/Types.h"
 #include "base/EventType.h"
@@ -153,6 +154,16 @@ void DrawNode::updateShaderInternal(CustomCommand& cmd,
 
     auto program = backend::Program::getBuiltinProgram(programType);
     pipelinePS   = new backend::ProgramState(program);
+    if (programType == backend::ProgramType::POSITION_COLOR_LENGTH_TEXTURE)
+    {
+        // 같은 도형이 마스크와 일반 자식으로 두 번 그려질 수 있어 draw 실행 시점에 확인.
+        const auto location = pipelinePS->getUniformLocation("u_maskCutoff");
+        pipelinePS->setCallbackUniform(location, [](backend::ProgramState* state, const backend::UniformLocation& loc) {
+            const float threshold = StencilStateManager::getActiveMaskAlphaThreshold();
+            const float cutoff = threshold < 1.f ? threshold + 1.f : 0.f;
+            state->setUniform(loc, &cutoff, sizeof(cutoff));
+        });
+    }
     setVertexLayout(cmd);
     cmd.setPrimitiveType(primitiveType);
     cmd.setDrawType(drawType);
