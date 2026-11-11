@@ -31,8 +31,10 @@
 #    include "platform/android/jni/Java_dev_axmol_lib_AxmolEngine.h"
 #endif
 #include <algorithm>
+#include <cmath>
 #include "2d/FontFreeType.h"
 #include "base/UTF8.h"
+#include "base/Configuration.h"
 #include "base/Director.h"
 #include "base/EventListenerCustom.h"
 #include "base/EventDispatcher.h"
@@ -350,7 +352,6 @@ bool FontAtlas::prepareLetterDefinitions(const std::u32string& utf32Text)
     int adjustForExtend      = _letterEdgeExtend / 2;
     int bitmapWidth          = 0;
     int bitmapHeight         = 0;
-    int glyphHeight;
     Rect tempRect;
     FontLetterDefinition tempDef;
 
@@ -399,27 +400,56 @@ bool FontAtlas::prepareLetterDefinitions(const std::u32string& utf32Text)
         }
         if (bitmap && bitmapWidth > 0 && bitmapHeight > 0)
         {
+            // 큰 데이터 폰트도 실제 비트맵과 여백이 전부 들어갈 페이지 필요
+            const int glyphWidth = std::max(bitmapWidth + 2 * adjustForExtend,
+                static_cast<int>(std::ceil(tempRect.size.width + _letterPadding + _letterEdgeExtend)));
+            const int glyphHeight = std::max(bitmapHeight + 2 * adjustForExtend,
+                static_cast<int>(std::ceil(tempRect.size.height + _letterPadding + _letterEdgeExtend)));
+            const int maxTextureSize = Configuration::getInstance()->getMaxTextureSize();
+            if (glyphWidth > maxTextureSize || glyphHeight > maxTextureSize)
+            {
+                if (charRenderer->getOutlineSize() > 0) delete[] bitmap;
+                AXLOGW("Font glyph {} exceeds texture limit {}: {}x{}", static_cast<uint32_t>(charCode),
+                       maxTextureSize, glyphWidth, glyphHeight);
+                tempDef = FontLetterDefinition{};
+                _letterDefinitions[charCode] = tempDef;
+                continue;
+            }
+            if (glyphWidth > _width || glyphHeight > _height)
+            {
+                // 기존 페이지/UV는 유지하고 새 페이지부터 확장
+                updateTextureContent(pixelFormat, startY);
+                _width = std::max(_width, glyphWidth);
+                _height = std::max(_height, glyphHeight);
+                _currentPageDataSize = (_width * _height) << _strideShift;
+                delete[] _currentPageData;
+                _currentPageData = new uint8_t[_currentPageDataSize];
+                _currentPageOrigX = 0;
+                _currLineHeight = 0;
+                startY = 0;
+                addNewPage();
+            }
             tempDef.validDefinition = true;
             tempDef.width           = tempRect.size.width + _letterPadding + _letterEdgeExtend;
             tempDef.height          = tempRect.size.height + _letterPadding + _letterEdgeExtend;
             tempDef.offsetX         = tempRect.origin.x - adjustForDistanceMap - adjustForExtend;
             tempDef.offsetY         = _fontAscender + tempRect.origin.y - adjustForDistanceMap - adjustForExtend;
 
-            if (_currentPageOrigX + tempDef.width > _width)
+            if (_currentPageOrigX + glyphWidth > _width)
             {
                 _currentPageOrigY += _currLineHeight;
                 _currLineHeight   = 0;
                 _currentPageOrigX = 0;
-                if (_currentPageOrigY + _lineHeight + _letterPadding + _letterEdgeExtend >= _height)
-                {
-                    updateTextureContent(pixelFormat, startY);
-
-                    startY = 0;
-
-                    addNewPage();
-                }
             }
-            glyphHeight = static_cast<int>(bitmapHeight) + _letterPadding + _letterEdgeExtend;
+            // fallback 글자는 기본 폰트 lineHeight보다 클 수 있음
+            if (_currentPageOrigY + glyphHeight > _height)
+            {
+                updateTextureContent(pixelFormat, startY);
+                _currentPageOrigX = 0;
+                _currLineHeight = 0;
+                startY = 0;
+                addNewPage();
+            }
             _currLineHeight = std::max(glyphHeight, _currLineHeight);
             charRenderer->renderCharAt(_currentPageData, (int)_currentPageOrigX + adjustForExtend,
                                        (int)_currentPageOrigY + adjustForExtend, bitmap, bitmapWidth, bitmapHeight,
@@ -462,9 +492,10 @@ bool FontAtlas::prepareLetterDefinitions(const std::u32string& utf32Text)
 
 void FontAtlas::updateTextureContent(backend::PixelFormat format, int startY)
 {
+    const int height = std::min(static_cast<int>(_currentPageOrigY) - startY + _currLineHeight, _height - startY);
+    if (height <= 0) return;
     auto data = _currentPageData + (_width * (int)startY << _strideShift);
-    _atlasTextures[_currentPage]->updateWithSubData(data, 0, startY, _width,
-                                                    (std::min)((int)_currentPageOrigY - startY + _currLineHeight, _height));
+    _atlasTextures[_currentPage]->updateWithSubData(data, 0, startY, _width, height);
 }
 
 void FontAtlas::addNewPage()
