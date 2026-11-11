@@ -80,6 +80,9 @@ enum TweenType
     Bounce_EaseOut,
     Bounce_EaseInOut,
 
+    /** CSS cubic-bezier. easingParam = { x1, y1, x2, y2 } (start (0,0), end (1,1)). */
+    Bezier,
+
     TWEEN_EASING_MAX = 10000
 };
 
@@ -291,6 +294,13 @@ float AX_DLL bounceEaseInOut(float time);
  * @param time in seconds.
  */
 float AX_DLL customEase(float time, float* easingParam);
+
+/**
+ * CSS cubic-bezier(x1, y1, x2, y2) easing.
+ * @param time in seconds.
+ * @param easingParam { x1, y1, x2, y2 }. If x1 or x2 is outside [0, 1], x(t) may be non-monotonic. Returns time as is if null.
+ */
+float AX_DLL bezierEase(float time, float* easingParam);
 }  // namespace tweenfunc
 
 }
