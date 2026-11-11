@@ -27,6 +27,8 @@ THE SOFTWARE.
 
 #define _USE_MATH_DEFINES  // needed for M_PI and M_PI2
 #include <math.h>          // M_PI
+#include <algorithm>
+#include <cmath>
 #undef _USE_MATH_DEFINES
 
 namespace ax
@@ -172,6 +174,10 @@ float tweenTo(float time, TweenType type, float* easingParam)
         break;
     case Bounce_EaseInOut:
         delta = bounceEaseInOut(time);
+        break;
+
+    case Bezier:
+        delta = bezierEase(time, easingParam);
         break;
 
     default:
@@ -475,6 +481,51 @@ float customEase(float time, float* easingParam)
                3 * easingParam[5] * time * time * tt + easingParam[7] * time * time * time;
     }
     return time;
+}
+
+float bezierEase(float time, float* easingParam)
+{
+    if (!easingParam || time <= 0 || time >= 1) return time;
+
+    // x(t) = time 인 t를 구한 뒤 y(t)를 돌려준다. x1, x2가 0~1 밖이면 x(t)가 단조롭지 않을 수 있고, 그때는 time과 만나는 t 중 하나를 쓴다.
+    const float x1 = easingParam[0];
+    const float y1 = easingParam[1];
+    const float x2 = easingParam[2];
+    const float y2 = easingParam[3];
+    auto bezier = [](float a, float b, float t) {
+        const float u = 1 - t;
+        return 3 * u * u * t * a + 3 * u * t * t * b + t * t * t;
+    };
+    auto derivative = [](float a, float b, float t) {
+        const float u = 1 - t;
+        return 3 * u * u * a + 6 * u * t * (b - a) + 3 * t * t * (1 - b);
+    };
+
+    float t = time;
+    bool isConverged = false;
+    for (int i = 0; i < 8; i++)
+    {
+        const float dx = bezier(x1, x2, t) - time;
+        if (std::fabs(dx) < 1e-5f)
+        {
+            isConverged = true;
+            break;
+        }
+        const float d = derivative(x1, x2, t);
+        if (std::fabs(d) < 1e-6f) break;
+        t -= dx / d;
+    }
+    if (!isConverged || t < 0 || t > 1)
+    {
+        float lo = 0;
+        float hi = 1;
+        for (int i = 0; i < 30; i++)
+        {
+            t = (lo + hi) * 0.5f;
+            if (bezier(x1, x2, t) < time) { lo = t; } else { hi = t; }
+        }
+    }
+    return bezier(y1, y2, t);
 }
 
 float easeIn(float time, float rate)
