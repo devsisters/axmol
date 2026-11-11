@@ -415,7 +415,7 @@ static void generateElementForObject(const Value& value, pugi::xml_node& parent)
         node.append_child(pugi::xml_node_type::node_pcdata).set_value(value.asString());
     }
     // object is integer
-    else if (value.getType() == Value::Type::INTEGER)
+    else if (value.getTypeFamily() == Value::Type::INTEGER)
     {
         auto node = parent.append_child("integer"sv);
         node.append_child(pugi::xml_node_type::node_pcdata).set_value(value.asString());
