@@ -71,7 +71,7 @@ public:
         }
 
         NSData* data = [[NSUserDefaults standardUserDefaults] dataForKey:[NSString stringWithUTF8String:key]];
-        if (!data)
+        if (!data || data.length == 0)
         {
             return defaultValue;
         }
