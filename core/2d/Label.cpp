@@ -63,7 +63,12 @@ void updateBlend(backend::BlendDescriptor& blendDescriptor, BlendFunc blendFunc)
     {
         blendDescriptor.sourceRGBBlendFactor        = backend::BlendFactor::SRC_ALPHA;
         blendDescriptor.destinationRGBBlendFactor   = backend::BlendFactor::ONE_MINUS_SRC_ALPHA;
+#if UI_BUILDER
+        // 투명 캔버스에서 글자/외곽 알파가 두 번 곱해지지 않도록 처리.
+        blendDescriptor.sourceAlphaBlendFactor      = backend::BlendFactor::ONE;
+#else
         blendDescriptor.sourceAlphaBlendFactor      = backend::BlendFactor::SRC_ALPHA;
+#endif
         blendDescriptor.destinationAlphaBlendFactor = backend::BlendFactor::ONE_MINUS_SRC_ALPHA;
     }
     else
