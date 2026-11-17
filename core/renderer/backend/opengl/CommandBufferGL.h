@@ -204,6 +204,8 @@ public:
      */
     void readPixels(RenderTarget* rt, std::function<void(const PixelBufferDescriptor&)> callback) override;
 
+    bool captureRenderTarget(RenderTarget* rt, TextureBackend*& texture, Viewport& region) override;
+
 
     /**
     * For internal use only

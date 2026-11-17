@@ -201,6 +201,8 @@ public:
      */
     void readPixels(RenderTarget* rt, std::function<void(const PixelBufferDescriptor&)> callback) override;
 
+    bool captureRenderTarget(RenderTarget* rt, TextureBackend*& texture, Viewport& region) override;
+
     id<MTLRenderCommandEncoder> getRenderCommandEncoder() const { return _mtlRenderEncoder; }
 
     id<MTLCommandBuffer> getMTLCommandBuffer() const { return _mtlCommandBuffer; }

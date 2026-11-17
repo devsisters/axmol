@@ -9,11 +9,13 @@ layout(location = COLOR0) in vec4 a_color;
 
 layout(location = COLOR0) out vec4 v_color;
 layout(location = TEXCOORD0) out vec2 v_texCoord;
+layout(location = TEXCOORD1) out vec2 v_maskAlpha;
 
 
 
 layout(std140) uniform vs_ub {
     float u_alpha;
+    float u_maskCutoff;
     mat4 u_MVPMatrix;
 };
 
@@ -21,6 +23,7 @@ void main()
 {
     v_color = vec4(a_color.rgb * a_color.a * u_alpha, a_color.a * u_alpha);
     v_texCoord = a_texCoord;
+    v_maskAlpha = vec2(a_color.a, u_maskCutoff);
 
     gl_Position = u_MVPMatrix * a_position;
 }

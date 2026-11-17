@@ -404,6 +404,8 @@ void DriverBase::destroyInstance()
 
 void DriverMTL::setCAMetalLayer(CAMetalLayer* metalLayer)
 {
+    // 화면에 적용하는 Blend의 GPU 배경 복사 허용. drawable 획득 전에 설정 필요
+    metalLayer.framebufferOnly = NO;
     DriverMTL::_metalLayer = metalLayer;
 }
 

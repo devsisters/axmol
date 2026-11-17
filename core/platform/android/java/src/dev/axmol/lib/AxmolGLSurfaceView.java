@@ -100,7 +100,7 @@ public class AxmolGLSurfaceView extends GLSurfaceView {
     }
 
     protected void initView() {
-        this.setEGLContextClientVersion(2);
+        this.setEGLContextClientVersion(3);
         this.setFocusableInTouchMode(true);
 
         AxmolGLSurfaceView.mGLSurfaceView = this;

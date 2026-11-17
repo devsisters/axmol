@@ -28,6 +28,7 @@
 
 #include "base/Object.h"
 #include "base/Data.h"
+#include "base/Types.h"
 
 #include "Macros.h"
 #include "Types.h"
@@ -221,6 +222,10 @@ public:
      */
     virtual void readPixels(RenderTarget* rt, std::function<void(const PixelBufferDescriptor&)> callback) = 0;
 
+    // 렌더 큐의 callback에서 호출. CPU readback 없이 COLOR0을 별도 텍스처로 복사
+    // texture는 호출자가 보관·해제하며 크기/포맷 변경 시 교체. region은 복사된 영역의 native 좌표로 반환
+    virtual bool captureRenderTarget(RenderTarget* rt, TextureBackend*& texture, Viewport& region) = 0;
+
     /**
      * Update both front and back stencil reference value.
      * @param value Specifies stencil reference value.
@@ -236,6 +241,8 @@ public:
 
 protected:
     virtual ~CommandBuffer() = default;
+
+    static bool prepareCaptureTexture(TextureBackend*& texture, int width, int height, PixelFormat format);
 
     unsigned int _stencilReferenceValueFront = 0;  ///< front stencil reference value.
     unsigned int _stencilReferenceValueBack  = 0;  ///< back stencil reference value.

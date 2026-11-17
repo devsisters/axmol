@@ -346,6 +346,34 @@ void CommandBufferMTL::readPixels(RenderTarget* rt, std::function<void(const Pix
     _captureCallbacks.emplace_back(texture, std::move(callback));
 }
 
+bool CommandBufferMTL::captureRenderTarget(RenderTarget* rt, TextureBackend*& texture, Viewport& region)
+{
+    auto* target = static_cast<RenderTargetMTL*>(rt);
+    auto attachment = target->getColorAttachment(0);
+    if (!attachment || !_mtlCommandBuffer) return false;
+    const int width = static_cast<int>(attachment.texture.width) >> attachment.level;
+    const int height = static_cast<int>(attachment.texture.height) >> attachment.level;
+    // 엔진 viewport는 좌하단 기준, Metal fragment 좌표와 텍스처는 좌상단 기준
+    region.y = height - region.y - region.height;
+    int right = std::min(width, region.x + region.width), bottom = std::min(height, region.y + region.height);
+    region.x = std::max(0, region.x);
+    region.y = std::max(0, region.y);
+    region.width = right - region.x;
+    region.height = bottom - region.y;
+    if (!prepareCaptureTexture(texture, region.width, region.height, target->getColorAttachmentPixelFormat(0))) return false;
+
+    // 현재 pass를 저장하고 같은 command buffer에서 복사. 다음 draw는 기존 attachment를 Load로 재개
+    endEncoding();
+    id<MTLBlitCommandEncoder> blit = [_mtlCommandBuffer blitCommandEncoder];
+    [blit copyFromTexture:attachment.texture sourceSlice:0 sourceLevel:attachment.level
+            sourceOrigin:MTLOriginMake(region.x, region.y, 0)
+              sourceSize:MTLSizeMake(region.width, region.height, 1)
+               toTexture:(id<MTLTexture>)texture->getHandler() destinationSlice:0 destinationLevel:0
+       destinationOrigin:MTLOriginMake(0, 0, 0)];
+    [blit endEncoding];
+    return true;
+}
+
 void CommandBufferMTL::endFrame()
 {
     [_mtlRenderEncoder endEncoding];
@@ -409,8 +437,7 @@ void CommandBufferMTL::flushCaptureCommands()
                 {
                     CommandBufferMTL::readPixels(_drawableTexture, 0, 0, [_drawableTexture width],
                                                  [_drawableTexture height], screenPixelData);
-                    // screen framebuffer copied, restore screen framebuffer only to true
-                    backend::DriverBase::getInstance()->setFrameBufferOnly(true);
+                    // 화면 캡처 후에도 Blend의 배경 복사가 필요하므로 framebufferOnly 유지
                 }
                 cb.second(screenPixelData);
             }

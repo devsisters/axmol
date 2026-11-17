@@ -23,8 +23,34 @@
  ****************************************************************************/
 
 #include "CommandBuffer.h"
+#include "DriverBase.h"
+#include "Texture.h"
 
 NS_AX_BACKEND_BEGIN
+
+bool CommandBuffer::prepareCaptureTexture(TextureBackend*& texture, int width, int height, PixelFormat format)
+{
+    if (width <= 0 || height <= 0) return false;
+    if (texture && texture->getWidth() == width && texture->getHeight() == height &&
+        texture->getTextureFormat() == format) return true;
+
+    TextureDescriptor descriptor;
+    descriptor.width = width;
+    descriptor.height = height;
+    descriptor.textureFormat = format;
+    descriptor.textureUsage = TextureUsage::RENDER_TARGET;
+    descriptor.samplerDescriptor.magFilter = descriptor.samplerDescriptor.minFilter = SamplerFilter::NEAREST;
+    descriptor.samplerDescriptor.sAddressMode = descriptor.samplerDescriptor.tAddressMode = SamplerAddressMode::CLAMP_TO_EDGE;
+    auto* replacement = DriverBase::getInstance()->newTexture(descriptor);
+    if (!replacement || !replacement->getHandler())
+    {
+        AX_SAFE_RELEASE(replacement);
+        return false;
+    }
+    AX_SAFE_RELEASE(texture);
+    texture = replacement;
+    return true;
+}
 
 void CommandBuffer::setStencilReferenceValue(uint32_t value)
 {

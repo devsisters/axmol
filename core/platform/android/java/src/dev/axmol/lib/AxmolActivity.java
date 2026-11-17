@@ -412,7 +412,6 @@ public abstract class AxmolActivity extends Activity implements AxmolEngineListe
     private class AxmolEGLConfigChooser implements GLSurfaceView.EGLConfigChooser
     {
         private int[] mConfigAttributes;
-        private  final int EGL_OPENGL_ES2_BIT = 0x04;
         private  final int EGL_OPENGL_ES3_BIT = 0x40;
         public AxmolEGLConfigChooser(int redSize, int greenSize, int blueSize, int alphaSize, int depthSize, int stencilSize, int multisamplingCount)
         {
@@ -428,7 +427,7 @@ public abstract class AxmolActivity extends Activity implements AxmolEngineListe
         {
             int[][] EGLAttributes = {
                 {
-                    // GL ES 2 with user set
+                    // GL ES 3 사용자 설정 사용
                     EGL10.EGL_RED_SIZE, mConfigAttributes[0],
                     EGL10.EGL_GREEN_SIZE, mConfigAttributes[1],
                     EGL10.EGL_BLUE_SIZE, mConfigAttributes[2],
@@ -437,11 +436,11 @@ public abstract class AxmolActivity extends Activity implements AxmolEngineListe
                     EGL10.EGL_STENCIL_SIZE, mConfigAttributes[5],
                     EGL10.EGL_SAMPLE_BUFFERS, (mConfigAttributes[6] > 0) ? 1 : 0,
                     EGL10.EGL_SAMPLES, mConfigAttributes[6],
-                    EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+                    EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
                     EGL10.EGL_NONE
                 },
                 {
-                     // GL ES 2 with user set 16 bit depth buffer
+                     // GL ES 3 depth buffer 16비트로 재시도
                      EGL10.EGL_RED_SIZE, mConfigAttributes[0],
                      EGL10.EGL_GREEN_SIZE, mConfigAttributes[1],
                      EGL10.EGL_BLUE_SIZE, mConfigAttributes[2],
@@ -450,11 +449,11 @@ public abstract class AxmolActivity extends Activity implements AxmolEngineListe
                      EGL10.EGL_STENCIL_SIZE, mConfigAttributes[5],
                      EGL10.EGL_SAMPLE_BUFFERS, (mConfigAttributes[6] > 0) ? 1 : 0,
                      EGL10.EGL_SAMPLES, mConfigAttributes[6],
-                     EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+                     EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
                      EGL10.EGL_NONE
                 },
                 {
-                     // GL ES 2 with user set 16 bit depth buffer without multisampling
+                     // GL ES 3 멀티샘플 없이 재시도
                      EGL10.EGL_RED_SIZE, mConfigAttributes[0],
                      EGL10.EGL_GREEN_SIZE, mConfigAttributes[1],
                      EGL10.EGL_BLUE_SIZE, mConfigAttributes[2],
@@ -463,12 +462,12 @@ public abstract class AxmolActivity extends Activity implements AxmolEngineListe
                      EGL10.EGL_STENCIL_SIZE, mConfigAttributes[5],
                      EGL10.EGL_SAMPLE_BUFFERS, 0,
                      EGL10.EGL_SAMPLES, 0,
-                     EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+                     EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
                      EGL10.EGL_NONE
                 },
                 {
-                    // GL ES 2 by default
-                    EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+                    // GL ES 3 최소 설정으로 재시도
+                    EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
                     EGL10.EGL_NONE
                 }
             };

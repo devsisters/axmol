@@ -460,6 +460,31 @@ void CommandBufferGL::readPixels(RenderTarget* rt, std::function<void(const Pixe
     callback(pbd);
 }
 
+bool CommandBufferGL::captureRenderTarget(RenderTarget* rt, TextureBackend*& texture, Viewport& region)
+{
+    int right = region.x + region.width, top = region.y + region.height;
+    if (auto* attachment = rt->_color[0].texture)
+    {
+        right = std::min(right, attachment->getWidth() >> rt->_color[0].level);
+        top = std::min(top, attachment->getHeight() >> rt->_color[0].level);
+    }
+    region.x = std::max(0, region.x);
+    region.y = std::max(0, region.y);
+    region.width = right - region.x;
+    region.height = top - region.y;
+    if (!prepareCaptureTexture(texture, region.width, region.height, PixelFormat::RGBA8)) return false;
+
+    // 엔진의 상태 캐시를 거쳐 바인딩. 다음 draw도 실제 GL 상태와 일치해야함
+    auto* target = static_cast<RenderTargetGL*>(rt);
+    target->bindFrameBuffer();
+    target->update();
+    __gl->activeTexture(GL_TEXTURE0);
+    __gl->bindTexture(GL_TEXTURE_2D, static_cast<GLuint>(texture->getHandler()));
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, region.x, region.y, region.width, region.height);
+    CHECK_GL_ERROR_DEBUG();
+    return true;
+}
+
 void CommandBufferGL::readPixels(RenderTarget* rt,
                                  int x,
                                  int y,

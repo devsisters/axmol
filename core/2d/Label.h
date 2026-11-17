@@ -655,6 +655,7 @@ public:
      */
     float getLineHeight() const;
 
+    /** getLineHeight(), cocos2d와 같은 폰트 픽셀 단위의 추가 줄간격 */
     void setLineSpacing(float height);
     float getLineSpacing() const;
 

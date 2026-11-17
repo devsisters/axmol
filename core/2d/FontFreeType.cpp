@@ -689,6 +689,13 @@ void FontFreeType::renderCharAt(unsigned char* dest,
                                 int atlasWidth,
                                 int atlasHeight)
 {
+    // 잘못된 페이지 좌표로 주변 메모리를 덮어쓰지 않도록 방어
+    if (!dest || !bitmap || posX < 0 || posY < 0 || bitmapWidth <= 0 || bitmapHeight <= 0 ||
+        posX > atlasWidth || posY > atlasHeight || bitmapWidth > atlasWidth - posX || bitmapHeight > atlasHeight - posY)
+    {
+        if (_outlineSize > 0) delete[] bitmap;
+        return;
+    }
     const int iX = posX;
     int iY       = posY;
 
