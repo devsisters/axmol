@@ -223,9 +223,9 @@ public:
         /// no value is wrapped, an empty Value
         NONE = 0,
         /// wrap integer
-        INTEGER = 2, // 1 was byte
+        INTEGER,
         /// wrap float
-        FLOAT = 4, // 3 was unsigned
+        FLOAT,
         /// wrap double
         DOUBLE,
         /// wrap bool
