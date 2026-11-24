@@ -172,7 +172,11 @@ int Application::run()
     while (!renderView->windowShouldClose())
     {
         lastTime = std::chrono::steady_clock::now();
-        const bool isDisplayPaced = prepareMacDisplayLinkPacing(renderView, _animationInterval);
+        bool isDisplayPaced = false;
+        @autoreleasepool
+        {
+            isDisplayPaced = prepareMacDisplayLinkPacing(renderView, _animationInterval);
+        }
         director->mainLoop();
         renderView->pollEvents();
 
