@@ -26,6 +26,7 @@ THE SOFTWARE.
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 #include <algorithm>
+#include <cmath>
 #include <thread>
 
 #include "platform/Application.h"
@@ -34,6 +35,9 @@ THE SOFTWARE.
 #include "base/Director.h"
 #include "base/Utils.h"
 #include "renderer/backend/metal/DriverMTL.h"
+#import <CoreVideo/CoreVideo.h>
+#import <QuartzCore/CAMetalLayer.h>
+#include <atomic>
 
 namespace ax
 {
@@ -50,6 +54,101 @@ Application::~Application()
 {
     AXASSERT(this == sm_pSharedApplication, "sm_pSharedApplication != this");
     sm_pSharedApplication = 0;
+}
+
+// 디스플레이 링크 페이싱 (맥 전용).
+// VSync 가 켜져 있으면 창이 있는 디스플레이의 vblank 신호(CVDisplayLink)를 받아 N = round(animationInterval / 주사 주기) 번째
+// vblank 마다 프레임을 시작한다 (120Hz → 2 = 60fps, 60·75Hz → 1). Metal present 는 CPU 를 블로킹하지 않아 sleep 이나
+// 드로어블 대기로는 vblank 위상에 고정되지 않으므로 루프 시작 시점을 vblank 에 묶는다. VSync 꺼짐·링크 실패 시 기존 sleep 페이싱
+struct MacDisplayLinkPacer
+{
+    CVDisplayLinkRef displayLink    = nullptr;
+    CGDirectDisplayID displayId     = kCGNullDirectDisplay;
+    dispatch_semaphore_t vblankSignal = nullptr;
+    std::atomic<int64_t> vblankCount{0};
+    int64_t frameStartVblank        = 0;
+    int vblanksPerFrame             = 1;
+};
+
+static MacDisplayLinkPacer macDisplayLinkPacer;
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+static CVReturn onMacDisplayLinkVblank(CVDisplayLinkRef, const CVTimeStamp*, const CVTimeStamp*, CVOptionFlags, CVOptionFlags*, void*)
+{
+    macDisplayLinkPacer.vblankCount.fetch_add(1);
+    dispatch_semaphore_signal(macDisplayLinkPacer.vblankSignal);
+    return kCVReturnSuccess;
+}
+
+static bool prepareMacDisplayLinkPacing(RenderView* renderView, std::chrono::nanoseconds animationInterval)
+{
+    auto& pacer              = macDisplayLinkPacer;
+    CAMetalLayer* metalLayer = backend::DriverMTL::getCAMetalLayer();
+    NSWindow* window         = (NSWindow*)renderView->getCocoaWindow();
+    if (!metalLayer || !metalLayer.displaySyncEnabled || !window || !window.screen)
+        return false;
+
+    const auto displayId = static_cast<CGDirectDisplayID>([window.screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue]);
+    if (!pacer.displayLink)
+    {
+        if (CVDisplayLinkCreateWithCGDisplay(displayId, &pacer.displayLink) != kCVReturnSuccess)
+        {
+            pacer.displayLink = nullptr;
+            return false;
+        }
+        if (!pacer.vblankSignal)
+            pacer.vblankSignal = dispatch_semaphore_create(0);
+        CVDisplayLinkSetOutputCallback(pacer.displayLink, onMacDisplayLinkVblank, nullptr);
+        CVDisplayLinkStart(pacer.displayLink);
+        pacer.displayId = displayId;
+    }
+    else if (pacer.displayId != displayId)
+    {
+        // 창이 다른 모니터로 이동
+        CVDisplayLinkSetCurrentCGDisplay(pacer.displayLink, displayId);
+        pacer.displayId = displayId;
+    }
+
+    double refreshPeriod = CVDisplayLinkGetActualOutputVideoRefreshPeriod(pacer.displayLink);
+    if (refreshPeriod <= 0)
+    {
+        const CVTime nominal = CVDisplayLinkGetNominalOutputVideoRefreshPeriod(pacer.displayLink);
+        if (!(nominal.flags & kCVTimeIsIndefinite) && nominal.timeScale > 0)
+            refreshPeriod = static_cast<double>(nominal.timeValue) / nominal.timeScale;
+    }
+    if (refreshPeriod <= 0)
+        return false;
+
+    pacer.vblanksPerFrame = std::max(1, static_cast<int>(std::lround(animationInterval.count() / 1e9 / refreshPeriod)));
+    return true;
+}
+
+static void stopMacDisplayLinkPacing()
+{
+    auto& pacer = macDisplayLinkPacer;
+    if (pacer.displayLink)
+    {
+        CVDisplayLinkStop(pacer.displayLink);
+        CVDisplayLinkRelease(pacer.displayLink);
+        pacer.displayLink = nullptr;
+    }
+}
+#pragma clang diagnostic pop
+
+// 직전 프레임 시작 vblank 로부터 vblanksPerFrame 번째 vblank 까지 대기. 이미 지났으면 바로 진행.
+// vblank 신호가 끊기면(디스플레이 절전 등) animationInterval 2배 뒤 진행해 루프가 멈추지 않게 한다
+static void waitMacDisplayLinkVblank(std::chrono::nanoseconds animationInterval)
+{
+    auto& pacer          = macDisplayLinkPacer;
+    const int64_t target = pacer.frameStartVblank + pacer.vblanksPerFrame;
+    const auto deadline  = dispatch_time(DISPATCH_TIME_NOW, animationInterval.count() * 2);
+    while (pacer.vblankCount.load() < target)
+    {
+        if (dispatch_semaphore_wait(pacer.vblankSignal, deadline) != 0)
+            break;
+    }
+    pacer.frameStartVblank = pacer.vblankCount.load();
 }
 
 int Application::run()
@@ -73,13 +172,17 @@ int Application::run()
     while (!renderView->windowShouldClose())
     {
         lastTime = std::chrono::steady_clock::now();
-
+        const bool isDisplayPaced = prepareMacDisplayLinkPacing(renderView, _animationInterval);
         director->mainLoop();
         renderView->pollEvents();
 
         auto interval = std::chrono::steady_clock::now() - lastTime;
         auto waitDuration = _animationInterval - interval - _1ms;
-        if (waitDuration.count() > 0)
+        if (isDisplayPaced)
+        {
+            waitMacDisplayLinkVblank(_animationInterval);
+        }
+        else if (waitDuration.count() > 0)
             std::this_thread::sleep_for(waitDuration);
         else
             std::this_thread::yield();
@@ -90,6 +193,8 @@ int Application::run()
      *  when we want to close the window, we should call Director::end();
      *  then call Director::mainLoop to do release of internal resources
      */
+    stopMacDisplayLinkPacing();
+
     if (renderView->isGfxContextReady())
     {
         director->end();
