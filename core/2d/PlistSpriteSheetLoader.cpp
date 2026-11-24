@@ -225,6 +225,7 @@ void PlistSpriteSheetLoader::addSpriteFramesWithDictionary(ValueMap& dictionary,
     std::vector<std::string> frameAliases;
     auto textureFileName = Director::getInstance()->getTextureCache()->getTextureFilePath(texture);
     Image* image         = nullptr;
+    bool ninePatchImageTried = false;
     NinePatchImageParser parser;
     for (auto&& iter : framesDict)
     {
@@ -327,14 +328,19 @@ void PlistSpriteSheetLoader::addSpriteFramesWithDictionary(ValueMap& dictionary,
         auto flag = NinePatchImageParser::isNinePatchImage(spriteFrameName);
         if (flag)
         {
-            if (image == nullptr)
+            if (!ninePatchImageTried)
             {
-                image = new Image();
-                image->initWithImageFile(textureFileName);
+                ninePatchImageTried = true;
+                image               = new Image();
+                if (!image->initWithImageFile(textureFileName) || !NinePatchImageParser::canParse(image))
+                    AX_SAFE_DELETE(image);
             }
-            parser.setSpriteFrameInfo(image, spriteFrame->getRectInPixels(), spriteFrame->isRotated());
-            // texture->addSpriteFrameCapInset(spriteFrame, parser.parseCapInset());
-            cache.addSpriteFrameCapInset(spriteFrame, parser.parseCapInset(), texture);
+            if (image)
+            {
+                parser.setSpriteFrameInfo(image, spriteFrame->getRectInPixels(), spriteFrame->isRotated());
+                // texture->addSpriteFrameCapInset(spriteFrame, parser.parseCapInset());
+                cache.addSpriteFrameCapInset(spriteFrame, parser.parseCapInset(), texture);
+            }
         }
 
         // add sprite frame

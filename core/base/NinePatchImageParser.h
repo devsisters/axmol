@@ -56,6 +56,8 @@ public:
      */
     static bool isNinePatchImage(std::string_view filename);
 
+    static bool canParse(Image* image);
+
     /**
      * Default constructor.
      *

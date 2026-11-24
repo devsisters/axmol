@@ -53,6 +53,9 @@ struct TextureInfoMTL
 
     id<MTLTexture> ensure(int index, int target);
     void destroy();
+    bool hasSameStorage(const TextureDescriptor& descriptor) const;
+    void releaseTexture(int index);
+    void releaseAllTextures();
 
     id<MTLTexture> createTexture(id<MTLDevice> mtlDevice, const TextureDescriptor& descriptor, int target);
     void recreateSampler(const SamplerDescriptor& descriptor);

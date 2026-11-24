@@ -314,6 +314,13 @@ bool supportEACETC(FeatureSet featureSet)
     return false;
 }
 
+bool deviceSupportsAppleGPUFamily(id<MTLDevice> device, NSInteger appleFamily)
+{
+    if (@available(macOS 10.15, iOS 13.0, tvOS 13.0, *))
+        return [device supportsFamily:MTLGPUFamily(MTLGPUFamilyApple1 + appleFamily - 1)];
+    return false;
+}
+
 bool supportASTC(FeatureSet featureSet)
 {
     switch (featureSet)
@@ -552,7 +559,7 @@ bool DriverMTL::checkForFeatureSupported(FeatureType feature)
         break;
     case FeatureType::ETC1:
     case FeatureType::ETC2:
-        featureSupported = supportEACETC(_featureSet);
+        featureSupported = supportEACETC(_featureSet) || deviceSupportsAppleGPUFamily(_mtlDevice, 1);
         break;
     case FeatureType::S3TC:
         featureSupported = supportS3TC(_featureSet);
@@ -564,7 +571,7 @@ bool DriverMTL::checkForFeatureSupported(FeatureType feature)
         featureSupported = _isDepth24Stencil8PixelFormatSupported;
         break;
     case FeatureType::ASTC:
-        featureSupported = supportASTC(_featureSet);
+        featureSupported = supportASTC(_featureSet) || deviceSupportsAppleGPUFamily(_mtlDevice, 2);
         break;
     default:
         break;

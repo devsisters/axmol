@@ -55,6 +55,14 @@ THE SOFTWARE.
 
 #include "base/filesystem.h"
 
+#if AX_TARGET_PLATFORM == AX_PLATFORM_IOS || AX_TARGET_PLATFORM == AX_PLATFORM_MAC
+#    include <CoreFoundation/CoreFoundation.h>
+#    include <dirent.h>
+#    include <cerrno>
+#    include <climits>
+#    include <unordered_set>
+#endif
+
 #if defined(_WIN32)
 inline stdfs::path toFspath(const std::string_view& pathSV)
 {
@@ -498,10 +506,13 @@ FileUtils::~FileUtils()
 void FileUtils::setGBPackPaths(const std::vector<std::string>& paths)
 {
     const auto previous = std::atomic_load(&_gbpacks);
-    for (auto it = _fullPathCache.begin(); it != _fullPathCache.end();)
     {
-        if (it->second.empty() || (previous && previous->contains(it->second))) it = _fullPathCache.erase(it);
-        else ++it;
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        for (auto it = _fullPathCache.begin(); it != _fullPathCache.end();)
+        {
+            if (it->second.empty() || (previous && previous->contains(it->second))) it = _fullPathCache.erase(it);
+            else ++it;
+        }
     }
     auto next = std::make_shared<GBPackCache>();
     next->load(*this, paths);
@@ -566,6 +577,7 @@ bool FileUtils::init()
 
 void FileUtils::purgeCachedEntries()
 {
+    std::lock_guard<std::recursive_mutex> guard(_mutex);
     _fullPathCache.clear();
     _fullPathCacheDir.clear();
 }
@@ -699,6 +711,101 @@ std::string FileUtils::getPathForDirectory(std::string_view dir, std::string_vie
     return std::string{searchPath}.append(dir);
 }
 
+#if AX_TARGET_PLATFORM == AX_PLATFORM_IOS || AX_TARGET_PLATFORM == AX_PLATFORM_MAC
+static const std::string& bundleResourceRoot()
+{
+    static const std::string root = [] {
+        std::string result;
+        if (CFURLRef url = CFBundleCopyResourcesDirectoryURL(CFBundleGetMainBundle()))
+        {
+            char buffer[PATH_MAX];
+            if (CFURLGetFileSystemRepresentation(url, true, reinterpret_cast<UInt8*>(buffer), sizeof(buffer)))
+                result = std::string(buffer) + "/";
+            CFRelease(url);
+        }
+        return result;
+    }();
+    return root;
+}
+
+static bool isOpaqueContainerPath(std::string_view path)
+{
+    return path.find(".crp") != std::string_view::npos || path.find(".gbpack") != std::string_view::npos;
+}
+
+static bool bundleDirectoryMayContain(std::string_view directory, std::string_view fileName)
+{
+    const std::string& root = bundleResourceRoot();
+    if (root.empty() || isOpaqueContainerPath(directory))
+        return true;
+
+    std::string absolute;
+    if (!directory.empty() && directory.front() == '/')
+    {
+        if (!directory.starts_with(root))
+            return true;
+        absolute = directory;
+    }
+    else
+    {
+        absolute = root;
+        absolute += directory;
+    }
+
+    using Listing = std::unique_ptr<std::unordered_set<std::string>>;
+    static std::mutex listingMutex;
+    static std::unordered_map<std::string, Listing> listings;
+    std::lock_guard<std::mutex> lock(listingMutex);
+    auto it = listings.find(absolute);
+    if (it == listings.end())
+    {
+        Listing names;
+        if (DIR* dir = opendir(absolute.c_str()))
+        {
+            names = std::make_unique<std::unordered_set<std::string>>();
+            while (struct dirent* entry = readdir(dir))
+                names->insert(entry->d_name);
+            closedir(dir);
+        }
+        else if (errno == ENOENT || errno == ENOTDIR)
+        {
+            names = std::make_unique<std::unordered_set<std::string>>();
+        }
+        it = listings.emplace(std::move(absolute), std::move(names)).first;
+    }
+    return it->second == nullptr || it->second->count(std::string{fileName}) != 0;
+}
+#endif
+
+void FileUtils::setDownloadFileIndex(std::string_view downloadRoot, std::unordered_set<std::string> relativePaths)
+{
+    std::shared_ptr<DownloadFileIndex> next;
+    if (!downloadRoot.empty())
+    {
+        next                = std::make_shared<DownloadFileIndex>();
+        next->root          = downloadRoot;
+        next->relativePaths = std::move(relativePaths);
+    }
+    std::atomic_store(&_downloadFileIndex, std::shared_ptr<const DownloadFileIndex>(std::move(next)));
+}
+
+bool FileUtils::isFileExistUsingIndex(std::string_view absolutePath) const
+{
+    if (!isAbsolutePath(absolutePath) || absolutePath.find(".gbpack/") != std::string_view::npos)
+        return isFileExist(absolutePath);
+
+    const auto downloadIndex = std::atomic_load(&_downloadFileIndex);
+    if (downloadIndex && downloadIndex->covers(absolutePath))
+        return downloadIndex->lists(absolutePath) && isFileExist(absolutePath);
+
+#if AX_TARGET_PLATFORM == AX_PLATFORM_IOS || AX_TARGET_PLATFORM == AX_PLATFORM_MAC
+    const size_t slash = absolutePath.find_last_of('/');
+    if (!bundleDirectoryMayContain(absolutePath.substr(0, slash + 1), absolutePath.substr(slash + 1)))
+        return false;
+#endif
+    return isFileExist(absolutePath);
+}
+
 std::string FileUtils::fullPathForFilename(std::string_view filename) const
 {
     if (filename.empty())
@@ -716,6 +823,8 @@ std::string FileUtils::fullPathForFilename(std::string_view filename) const
     {
         return std::string{filename};
     }
+
+    std::lock_guard<std::recursive_mutex> guard(_mutex);
 
     // Already Cached ?
     auto cacheIter = _fullPathCache.find(filename);
@@ -738,8 +847,26 @@ std::string FileUtils::fullPathForFilename(std::string_view filename) const
 
     std::string fullpath;
 
+    const auto downloadIndex = std::atomic_load(&_downloadFileIndex);
+#if AX_TARGET_PLATFORM == AX_PLATFORM_IOS || AX_TARGET_PLATFORM == AX_PLATFORM_MAC
+    const size_t slash       = filename.find_last_of('/');
+    const auto fileDirectory = slash == std::string_view::npos ? std::string_view{} : filename.substr(0, slash + 1);
+    const auto fileName      = slash == std::string_view::npos ? filename : filename.substr(slash + 1);
+#endif
+
     for (const auto& searchIt : _searchPathArray)
     {
+        if (downloadIndex && downloadIndex->covers(searchIt))
+        {
+            if (!downloadIndex->lists(std::string{searchIt}.append(filename)))
+                continue;
+        }
+#if AX_TARGET_PLATFORM == AX_PLATFORM_IOS || AX_TARGET_PLATFORM == AX_PLATFORM_MAC
+        else if (!bundleDirectoryMayContain(std::string{searchIt}.append(fileDirectory), fileName))
+        {
+            continue;
+        }
+#endif
         fullpath = this->getPathForFilename(filename, searchIt);
 
         if (!fullpath.empty())
@@ -774,6 +901,7 @@ std::string FileUtils::fullPathForDirectory(std::string_view dir) const
     }
     else
     {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
         // Already Cached ?
         auto cacheIter = _fullPathCacheDir.find(dir);
         if (cacheIter != _fullPathCacheDir.end())
@@ -846,6 +974,7 @@ const std::string& FileUtils::getDefaultResourceRootPath() const
 
 void FileUtils::setDefaultResourceRootPath(std::string_view path)
 {
+    std::lock_guard<std::recursive_mutex> guard(_mutex);
     if (_defaultResRootPath != path)
     {
         _fullPathCache.clear();
@@ -863,6 +992,7 @@ void FileUtils::setDefaultResourceRootPath(std::string_view path)
 
 void FileUtils::setSearchPaths(const std::vector<std::string>& searchPaths)
 {
+    std::lock_guard<std::recursive_mutex> guard(_mutex);
     bool existDefaultRootPath = false;
     _originalSearchPaths      = searchPaths;
 
@@ -900,6 +1030,7 @@ void FileUtils::setSearchPaths(const std::vector<std::string>& searchPaths)
 
 void FileUtils::addSearchPath(std::string_view searchpath, const bool front)
 {
+    std::lock_guard<std::recursive_mutex> guard(_mutex);
     std::string path;
     if (!isAbsolutePath(searchpath))
         path = _defaultResRootPath;

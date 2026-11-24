@@ -372,6 +372,9 @@ target_include_directories(${_AX_CORE_LIB}
   INTERFACE ${_AX_ROOT}/core/platform/${PLATFORM_NAME}
 )
 
+set(AX_KTX_INCLUDE_DIR "${_AX_ROOT}/../cocos2d/external" CACHE PATH "Directory that contains ktx/include/ktx.h")
+target_include_directories(${_AX_CORE_LIB} PRIVATE ${AX_KTX_INCLUDE_DIR})
+
 set_target_properties(${_AX_CORE_LIB}
   PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"

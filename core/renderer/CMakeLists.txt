@@ -2,6 +2,7 @@ set(_AX_RENDERER_HEADER
   renderer/CallbackCommand.h
   renderer/CustomCommand.h
   renderer/GroupCommand.h
+  renderer/Ktx2Loader.h
   renderer/Material.h
   renderer/MeshCommand.h
   renderer/Pass.h
@@ -46,6 +47,7 @@ set(_AX_RENDERER_SRC
   renderer/CallbackCommand.cpp
   renderer/CustomCommand.cpp
   renderer/GroupCommand.cpp
+  renderer/Ktx2Loader.cpp
   renderer/Material.cpp
   renderer/MeshCommand.cpp
   renderer/Pass.cpp

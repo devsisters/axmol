@@ -180,6 +180,11 @@ void NinePatchImageParser::setSpriteFrameInfo(Image* image, const ax::Rect& fram
     this->_isRotated  = rotated;
 }
 
+bool NinePatchImageParser::canParse(Image* image)
+{
+    return image && image->getData() && image->getPixelFormat() == backend::PixelFormat::RGBA8;
+}
+
 bool NinePatchImageParser::isNinePatchImage(std::string_view filepath)
 {
     size_t length = filepath.length();

@@ -260,7 +260,7 @@ bool Texture2D::updateWithImage(Image* image, backend::PixelFormat format, int i
 
         // pixel format of data is not converted, renderFormat can be different from pixelFormat
         // it will be done later
-        updateWithMipmaps(image->getMipmaps(), image->getNumberOfMipmaps(), image->getPixelFormat(), renderFormat, imageHeight, imageWidth, image->hasPremultipliedAlpha(), index);
+        updateWithMipmaps(image->getMipmaps(), image->getNumberOfMipmaps(), image->getPixelFormat(), renderFormat, imageWidth, imageHeight, image->hasPremultipliedAlpha(), index);
     }
     else if (image->isCompressed())
     {  // !Only hardware support texture will be compression PixelFormat, otherwise, will convert to RGBA8 duraing image
@@ -382,7 +382,8 @@ bool Texture2D::updateWithMipmaps(MipmapInfo* mipmaps,
         textureDescriptor.textureFormat = pixelFormat;
         AXASSERT(textureDescriptor.textureFormat != backend::PixelFormat::NONE, "PixelFormat should not be NONE");
 
-        if (_texture->getTextureFormat() != textureDescriptor.textureFormat)
+        if (_texture->getTextureFormat() != textureDescriptor.textureFormat ||
+            _texture->getWidth() != pixelsWide || _texture->getHeight() != pixelsHigh)
             _texture->updateTextureDescriptor(textureDescriptor, index);
 
         if (compressed)
@@ -421,6 +422,7 @@ bool Texture2D::updateWithMipmaps(MipmapInfo* mipmaps,
         _pixelFormat = pixelFormat;
         _maxS        = 1;
         _maxT        = 1;
+        _mipmapCount = mipmapsNum;
 
         setPremultipliedAlpha(preMultipliedAlpha);
     }
@@ -674,6 +676,34 @@ unsigned int Texture2D::getBitsPerPixelForFormat() const
     return getBitsPerPixelForFormat(_pixelFormat);
 }
 
+size_t Texture2D::getDataSize() const
+{
+    if (_pixelFormat == backend::PixelFormat::NONE || _pixelsWide <= 0 || _pixelsHigh <= 0)
+        return 0;
+    const auto& descriptor = backend::PixelFormatUtils::getFormatDescriptor(_pixelFormat);
+    const bool blockCompressed = backend::PixelFormatUtils::isCompressed(_pixelFormat) && descriptor.blockWidth > 0 &&
+                                 descriptor.blockHeight > 0;
+    size_t bytes = 0;
+    size_t width  = static_cast<size_t>(_pixelsWide);
+    size_t height = static_cast<size_t>(_pixelsHigh);
+    for (int level = 0; level < std::max(1, _mipmapCount); ++level)
+    {
+        if (blockCompressed)
+        {
+            const size_t blocksWide = std::max<size_t>((width + descriptor.blockWidth - 1) / descriptor.blockWidth,
+                                                       descriptor.minBlockX);
+            const size_t blocksHigh = std::max<size_t>((height + descriptor.blockHeight - 1) / descriptor.blockHeight,
+                                                       descriptor.minBlockY);
+            bytes += blocksWide * blocksHigh * descriptor.blockSize;
+        }
+        else
+            bytes += width * height * descriptor.bpp / 8;
+        width  = std::max<size_t>(1, width / 2);
+        height = std::max<size_t>(1, height / 2);
+    }
+    return bytes;
+}
+
 void Texture2D::addSpriteFrameCapInset(SpriteFrame* spritframe, const Rect& capInsets)
 {
     if (nullptr == _ninePatchInfo)
@@ -736,6 +766,9 @@ void Texture2D::generateMipmap()
              "Mipmap texture only works in POT textures");
 
     _texture->generateMipmaps();
+    _mipmapCount = 1;
+    for (int size = std::max(_pixelsWide, _pixelsHigh); size > 1; size /= 2)
+        ++_mipmapCount;
 }
 
 void Texture2D::initProgram()

@@ -68,6 +68,12 @@ public:
     static void setETC1AlphaFileSuffix(std::string_view suffix);
     static std::string getETC1AlphaFileSuffix();
 
+    static void setKtx2Preferred(bool preferred);
+    static bool isKtx2Preferred();
+    static void setLoadTimingLogEnabled(bool enabled);
+    static std::string resolveKtx2Path(std::string_view originalPath);
+    static void warmUpKtx2Transcoder();
+
 public:
     /**
      */
@@ -197,6 +203,8 @@ public:
      */
     std::string getCachedTextureInfo() const;
 
+    std::string getCachedTextureSummary(int topCount) const;
+
     // Wait for texture cache to quit before destroy instance.
     /**Called by director, please do not called outside.*/
     void waitForQuit();
@@ -224,6 +232,9 @@ private:
     void addImageAsyncCallBack(float dt);
     void loadImage();
     void parseNinePatchImage(Image* image, Texture2D* texture, std::string_view path);
+    void parseNinePatchSourceFile(Texture2D* texture, std::string_view path);
+    Texture2D* addKtx2OnlyImage(std::string_view path);
+    void cacheFileTexture(const std::string& key, Texture2D* texture, std::string_view sourcePath);
 
 public:
 protected:

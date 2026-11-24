@@ -89,12 +89,22 @@ bool TarBundleFile::getFileData(const std::string& relativePath, ResizableBuffer
     if (_entityMap.find(relativePath) == _entityMap.end()) return false;
     auto entity = _entityMap[relativePath];
     FILE *fp = fopen(packFullPath.c_str(), "rb");
+    if (!fp)
+    {
+        AXLOGW("TarBundleFile: failed to open {}", packFullPath);
+        return false;
+    }
+    if (fseek(fp, entity->offset_data, SEEK_SET) != 0)
+    {
+        fclose(fp);
+        return false;
+    }
     buffer->resize(entity->size);
-    fseek(fp, entity->offset_data, SEEK_SET);
     size_t readsize = fread(buffer->buffer(), 1, entity->size, fp);
     fclose(fp);
     if (readsize < entity->size)
     {
+        buffer->resize(0);
         return false;
     }
     return true;

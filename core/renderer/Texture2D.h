@@ -370,6 +370,8 @@ public:
 
     std::string getPath() const { return _filePath; }
 
+    size_t getDataSize() const;
+
 private:
     /**
      * A struct for storing 9-patch image capInsets.
@@ -448,6 +450,7 @@ protected:
 
     bool _valid;
     std::string _filePath;
+    int _mipmapCount = 1;
 
     backend::ProgramState* _programState = nullptr;
     backend::UniformLocation _mvpMatrixLocation;

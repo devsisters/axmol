@@ -29,6 +29,7 @@ THE SOFTWARE.
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <type_traits>
 #include <mutex>
 #include <memory>
@@ -769,7 +770,11 @@ public:
                                            std::function<void(std::vector<std::string>)> callback) const;
 #endif
     /** Returns the full path cache. */
-    const hlookup::string_map<std::string> getFullPathCache() const { return _fullPathCache; }
+    const hlookup::string_map<std::string> getFullPathCache() const
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        return _fullPathCache;
+    }
 
     /** Returns the full path cache. */
     const hlookup::string_map<std::string> getFullPathCacheDir() const { return _fullPathCacheDir; }
@@ -797,8 +802,70 @@ public:
     virtual std::unique_ptr<IFileStream> openFileStream(std::string_view filePath, IFileStream::Mode mode) const;
     
     /** full-path-searching 속도가 너무 느려 모든 파일을 미리 캐싱해두기 위해 사용 */
-    void setFullPathCache(hlookup::string_map<std::string> cache) { _fullPathCache = std::move(cache); }
-    void removeFullPathCacheForFilename(const std::string& filename) { _fullPathCache.erase(filename); }
+    void setFullPathCache(hlookup::string_map<std::string> cache)
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        _fullPathCache = std::move(cache);
+    }
+    void removeFullPathCacheForFilename(const std::string& filename)
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        _fullPathCache.erase(filename);
+    }
+    void removeFullPathCacheEntriesForPaths(const std::unordered_set<std::string>& paths)
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        for (auto it = _fullPathCache.begin(); it != _fullPathCache.end();)
+        {
+            it = paths.count(it->second) > 0 ? _fullPathCache.erase(it) : std::next(it);
+        }
+    }
+    std::unordered_set<std::string> getCachedPathsIn(const std::unordered_set<std::string>& paths) const
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        std::unordered_set<std::string> found;
+        for (const auto& entry : _fullPathCache)
+        {
+            if (paths.count(entry.second) > 0)
+            {
+                found.insert(entry.second);
+            }
+        }
+        return found;
+    }
+    void removeFullPathCacheEntryIfPath(const std::string& filename, const std::string& path)
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        const auto it = _fullPathCache.find(filename);
+        if (it != _fullPathCache.end() && it->second == path)
+        {
+            _fullPathCache.erase(it);
+        }
+    }
+    hlookup::string_map<std::string> takeFullPathCache()
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        hlookup::string_map<std::string> taken;
+        taken.swap(_fullPathCache);
+        return taken;
+    }
+    std::string getCachedFullPath(std::string_view filename) const
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        const auto it = _fullPathCache.find(filename);
+        return it != _fullPathCache.end() ? it->second : std::string();
+    }
+    void addFullPathCacheEntries(const std::vector<std::pair<std::string, std::string>>& entries)
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        for (const auto& entry : entries)
+        {
+            _fullPathCache.emplace(entry.first, entry.second);
+        }
+    }
+
+    void setDownloadFileIndex(std::string_view downloadRoot, std::unordered_set<std::string> relativePaths);
+    bool isFileExistUsingIndex(std::string_view absolutePath) const;
     
     // 번들 파일 CRP
     TarBundleFile* getBundlePack() const{ return _crp; }
@@ -871,6 +938,8 @@ protected:
      */
     mutable hlookup::string_map<std::string> _fullPathCache;
 
+    mutable std::recursive_mutex _mutex;
+
     /**
      *  The full path cache for directories. When a diretory is found, it will be added into this cache.
      *  This variable is used for improving the performance of file search.
@@ -916,6 +985,19 @@ protected:
     
     TarBundleFile* _crp = nullptr;
     std::shared_ptr<const GBPackCache> _gbpacks;
+
+    struct DownloadFileIndex
+    {
+        std::string root;
+        std::unordered_set<std::string> relativePaths;
+
+        bool covers(std::string_view path) const { return !root.empty() && path.starts_with(root); }
+        bool lists(std::string_view coveredPath) const
+        {
+            return relativePaths.count(std::string{coveredPath.substr(root.size())}) != 0;
+        }
+    };
+    std::shared_ptr<const DownloadFileIndex> _downloadFileIndex;
 };
 
 // end of support group

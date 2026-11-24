@@ -133,6 +133,28 @@ void TextureInfoMTL::destroy()
     _maxIdx = -1;
 }
 
+bool TextureInfoMTL::hasSameStorage(const TextureDescriptor& descriptor) const
+{
+    return _descriptor.textureFormat == descriptor.textureFormat && _descriptor.width == descriptor.width &&
+           _descriptor.height == descriptor.height;
+}
+
+void TextureInfoMTL::releaseTexture(int index)
+{
+    id<MTLTexture>& mtlTexture = _mtlTextures[index];
+    if (!mtlTexture)
+        return;
+    [mtlTexture release];
+    mtlTexture = nil;
+}
+
+void TextureInfoMTL::releaseAllTextures()
+{
+    for (int i = 0; i <= _maxIdx; ++i)
+        releaseTexture(i);
+    _maxIdx = -1;
+}
+
 id<MTLTexture> TextureInfoMTL::createTexture(id<MTLDevice> mtlDevice, const TextureDescriptor& descriptor, int target)
 {
     MTLPixelFormat pixelFormat = UtilsMTL::toMTLPixelFormat(descriptor.textureFormat);
@@ -218,6 +240,15 @@ void TextureMTL::updateSamplerDescriptor(const SamplerDescriptor& sampler)
 
 void TextureMTL::updateTextureDescriptor(const ax::backend::TextureDescriptor& descriptor, int index)
 {
+    if (!_textureInfo.hasSameStorage(descriptor))
+    {
+        if (index == 0)
+            _textureInfo.releaseAllTextures();
+        else if (index < AX_META_TEXTURES)
+            _textureInfo.releaseTexture(index);
+        _hasMipmaps = false;
+    }
+
     TextureBackend::updateTextureDescriptor(descriptor, index);
 
     _textureInfo._descriptor = descriptor;

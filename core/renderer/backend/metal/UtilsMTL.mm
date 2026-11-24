@@ -77,7 +77,7 @@ static GPUTextureFormatInfo s_textureFormats[] = {
     {MTLPixelFormatInvalid, MTLPixelFormatInvalid},  // ATC_INTERPOLATED_ALPHA
 
 /* astc */
-#if (AX_TARGET_PLATFORM == AX_PLATFORM_IOS)
+#if (AX_TARGET_PLATFORM == AX_PLATFORM_IOS) || (AX_TARGET_PLATFORM == AX_PLATFORM_MAC)
     {MTLPixelFormatASTC_4x4_LDR,   MTLPixelFormatASTC_4x4_sRGB},     // ASTC4x4
     {MTLPixelFormatASTC_5x4_LDR,   MTLPixelFormatASTC_5x4_sRGB},     // ASTC5x4
     {MTLPixelFormatASTC_5x5_LDR,   MTLPixelFormatASTC_5x5_sRGB},     // ASTC5x5

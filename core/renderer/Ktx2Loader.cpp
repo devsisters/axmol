@@ -1,0 +1,194 @@
+#include "renderer/Ktx2Loader.h"
+#include "base/Configuration.h"
+#include "platform/FileUtils.h"
+#include <ktx/include/ktx.h>
+#include <climits>
+#include <mutex>
+
+namespace ax
+{
+
+namespace
+{
+constexpr uint32_t kVkFormatAstc4x4Unorm  = 157;
+constexpr uint32_t kVkFormatEtc2Rgba8Unorm = 151;
+
+void destroyKtxTexture(void* texture)
+{
+    ktxTexture_Destroy(ktxTexture(static_cast<ktxTexture2*>(texture)));
+}
+
+ktx_transcode_fmt_e chooseTranscodeTarget(backend::PixelFormat& format)
+{
+    auto conf = Configuration::getInstance();
+    if (conf->supportsASTC())
+    {
+        format = backend::PixelFormat::ASTC4x4;
+        return KTX_TTF_ASTC_4x4_RGBA;
+    }
+    if (conf->supportsETC2())
+    {
+        format = backend::PixelFormat::ETC2_RGBA;
+        return KTX_TTF_ETC2_RGBA;
+    }
+    format = backend::PixelFormat::RGBA8;
+    return KTX_TTF_RGBA32;
+}
+
+bool chooseNativeFormat(uint32_t vkFormat, backend::PixelFormat& format)
+{
+    auto conf = Configuration::getInstance();
+    if (vkFormat == kVkFormatAstc4x4Unorm && conf->supportsASTC())
+    {
+        format = backend::PixelFormat::ASTC4x4;
+        return true;
+    }
+    if (vkFormat == kVkFormatEtc2Rgba8Unorm && conf->supportsETC2())
+    {
+        format = backend::PixelFormat::ETC2_RGBA;
+        return true;
+    }
+    return false;
+}
+
+bool hasSupportedShape(const ktxTexture2* texture)
+{
+    return texture->numDimensions == 2 && texture->numLayers == 1 && texture->numFaces == 1 && !texture->isArray &&
+           texture->baseWidth != 0 && texture->baseHeight != 0 && texture->baseWidth <= INT_MAX &&
+           texture->baseHeight <= INT_MAX && texture->numLevels != 0 && texture->numLevels <= INT_MAX;
+}
+
+bool collectMipmaps(ktxTexture2* texture, std::vector<MipmapInfo>& mipmaps)
+{
+    for (ktx_uint32_t level = 0; level < texture->numLevels; ++level)
+    {
+        ktx_size_t offset = 0;
+        const auto size   = ktxTexture_GetImageSize(ktxTexture(texture), level);
+        if (ktxTexture_GetImageOffset(ktxTexture(texture), level, 0, 0, &offset) != KTX_SUCCESS || !texture->pData ||
+            size == 0 || size > INT_MAX || offset > texture->dataSize || size > texture->dataSize - offset)
+            return false;
+        MipmapInfo mip;
+        mip.address = texture->pData + offset;
+        mip.len     = static_cast<int>(size);
+        mipmaps.push_back(mip);
+    }
+    return true;
+}
+}
+
+Ktx2Decoded Ktx2Loader::decode(std::string_view filename)
+{
+    warmUp();
+    Ktx2Decoded result;
+    auto fileData = FileUtils::getInstance()->getDataFromFile(filename);
+    if (fileData.isNull())
+    {
+        AXLOGW("Ktx2Loader: failed to read {}", filename);
+        return result;
+    }
+
+    ktxTexture2* input = nullptr;
+    auto status        = ktxTexture2_CreateFromMemory(fileData.getBytes(), static_cast<ktx_size_t>(fileData.getSize()),
+                                                      KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &input);
+    fileData.clear();
+    if (status != KTX_SUCCESS)
+    {
+        AXLOGW("Ktx2Loader: failed to create {} ({})", filename, static_cast<int>(status));
+        return result;
+    }
+    std::unique_ptr<void, void (*)(void*)> owner(input, destroyKtxTexture);
+
+    if (!hasSupportedShape(input))
+    {
+        AXLOGW("Ktx2Loader: unsupported dimensions in {}", filename);
+        return result;
+    }
+
+    if (ktxTexture2_NeedsTranscoding(input))
+    {
+        status = ktxTexture2_TranscodeBasis(input, chooseTranscodeTarget(result.format), 0);
+        if (status != KTX_SUCCESS)
+        {
+            AXLOGW("Ktx2Loader: transcoding failed for {} ({})", filename, static_cast<int>(status));
+            return result;
+        }
+    }
+    else if (!chooseNativeFormat(input->vkFormat, result.format))
+    {
+        AXLOGW("Ktx2Loader: unsupported native format {} in {}", input->vkFormat, filename);
+        return result;
+    }
+
+    if (!collectMipmaps(input, result.mipmaps))
+    {
+        AXLOGW("Ktx2Loader: invalid mip level in {}", filename);
+        return Ktx2Decoded();
+    }
+
+    result.width   = static_cast<int>(input->baseWidth);
+    result.height  = static_cast<int>(input->baseHeight);
+    result.storage = std::move(owner);
+    return result;
+}
+
+void Ktx2Loader::warmUp()
+{
+    static std::once_flag once;
+    std::call_once(once, [] {
+        static const unsigned char kKtx2WarmupData[] = {
+            0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a,
+            0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+            0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+            0x68, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x94, 0x00, 0x00, 0x00,
+            0x80, 0x00, 0x00, 0x00, 0x18, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x98, 0x01, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x28, 0x00, 0xa3, 0x01, 0x02, 0x00,
+            0x03, 0x03, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0xff, 0xff, 0xff, 0xff, 0x12, 0x00, 0x00, 0x00, 0x4b, 0x54, 0x58, 0x6f,
+            0x72, 0x69, 0x65, 0x6e, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x00, 0x72,
+            0x64, 0x00, 0x00, 0x00, 0x27, 0x00, 0x00, 0x00, 0x4b, 0x54, 0x58, 0x77,
+            0x72, 0x69, 0x74, 0x65, 0x72, 0x00, 0x74, 0x6f, 0x6b, 0x74, 0x78, 0x20,
+            0x76, 0x34, 0x2e, 0x34, 0x2e, 0x32, 0x20, 0x2f, 0x20, 0x6c, 0x69, 0x62,
+            0x6b, 0x74, 0x78, 0x20, 0x76, 0x34, 0x2e, 0x34, 0x2e, 0x32, 0x00, 0x00,
+            0x37, 0x00, 0x00, 0x00, 0x4b, 0x54, 0x58, 0x77, 0x72, 0x69, 0x74, 0x65,
+            0x72, 0x53, 0x63, 0x50, 0x61, 0x72, 0x61, 0x6d, 0x73, 0x00, 0x2d, 0x2d,
+            0x65, 0x6e, 0x63, 0x6f, 0x64, 0x65, 0x20, 0x65, 0x74, 0x63, 0x31, 0x73,
+            0x20, 0x2d, 0x2d, 0x63, 0x6c, 0x65, 0x76, 0x65, 0x6c, 0x20, 0x31, 0x20,
+            0x2d, 0x2d, 0x71, 0x6c, 0x65, 0x76, 0x65, 0x6c, 0x20, 0x31, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x28, 0x00, 0x00, 0x00,
+            0x05, 0x00, 0x00, 0x00, 0x2b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xc0, 0x04, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x04, 0x98, 0x08, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x40, 0x52, 0x04, 0x00, 0x13, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x08, 0x01, 0x60, 0x02, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x31,
+            0x54, 0x55, 0x55, 0x55, 0x05, 0x00, 0xc1, 0x44, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0xf2, 0x5f, 0x2d, 0x00, 0x98, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x40, 0x08, 0x00, 0x13, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x88,
+            0x01, 0xc0, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x08, 0x00,
+            0x00
+        };
+
+        ktxTexture2* texture = nullptr;
+        auto status = ktxTexture2_CreateFromMemory(kKtx2WarmupData, sizeof(kKtx2WarmupData),
+                                                   KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &texture);
+        if (status != KTX_SUCCESS)
+        {
+            AXLOGW("Ktx2Loader: warm-up creation failed ({})", static_cast<int>(status));
+            return;
+        }
+        std::unique_ptr<void, void (*)(void*)> owner(texture, destroyKtxTexture);
+        if (!ktxTexture2_NeedsTranscoding(texture))
+            return;
+        backend::PixelFormat format;
+        status = ktxTexture2_TranscodeBasis(texture, chooseTranscodeTarget(format), 0);
+        if (status != KTX_SUCCESS)
+            AXLOGW("Ktx2Loader: warm-up transcode failed ({})", static_cast<int>(status));
+    });
+}
+
+}

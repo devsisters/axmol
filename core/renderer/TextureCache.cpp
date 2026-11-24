@@ -33,6 +33,11 @@ THE SOFTWARE.
 #include <stack>
 #include <cctype>
 #include <list>
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <map>
+#include <vector>
 
 #include "renderer/Texture2D.h"
 #include "base/Macros.h"
@@ -43,6 +48,8 @@ THE SOFTWARE.
 #include "base/Utils.h"
 #include "base/NinePatchImageParser.h"
 #include "renderer/backend/DriverBase.h"
+#include "renderer/Ktx2Loader.h"
+#include "base/Configuration.h"
 
 #ifdef _AX_DEBUG
 #include <thread>
@@ -52,6 +59,87 @@ using namespace std;
 
 namespace ax
 {
+
+namespace
+{
+std::atomic<bool> ktx2Preferred{true};
+std::atomic<bool> loadTimingLogEnabled{false};
+
+using LoadClock = std::chrono::steady_clock;
+
+float millisecondsSince(LoadClock::time_point start)
+{
+    return std::chrono::duration<float, std::milli>(LoadClock::now() - start).count();
+}
+
+void logKtx2Load(std::string_view stage, int width, int height, float milliseconds, std::string_view path)
+{
+    if (loadTimingLogEnabled.load())
+        AXLOGI("[TexLoad] ktx2 {} {}x{} {:.1f} ms {}", stage, width, height, milliseconds, path);
+}
+
+bool deviceHasCompressedTranscodeTarget()
+{
+    auto conf = Configuration::getInstance();
+    return conf->supportsASTC() || conf->supportsETC2();
+}
+
+std::string existingFullPath(std::string_view path)
+{
+    auto fileUtils       = FileUtils::getInstance();
+    std::string fullPath = fileUtils->fullPathForFilename(path);
+    if (!fullPath.empty() && fileUtils->isAbsolutePath(path) && !fileUtils->isFileExist(fullPath))
+        return {};
+    return fullPath;
+}
+
+std::string ktx2SiblingOf(std::string_view path)
+{
+    const auto dot   = path.find_last_of('.');
+    const auto slash = path.find_last_of('/');
+    if (dot == std::string_view::npos || (slash != std::string_view::npos && dot < slash))
+        return {};
+    return std::string{path.substr(0, dot)}.append(".ktx2");
+}
+
+bool uploadKtx2(Texture2D* texture, Ktx2Decoded& decoded, std::string_view path)
+{
+    if (!texture || !decoded.isValid())
+        return false;
+    const bool uploaded =
+        texture->updateWithMipmaps(decoded.mipmaps.data(), static_cast<int>(decoded.mipmaps.size()), decoded.format,
+                                   decoded.format, decoded.width, decoded.height, decoded.premultiplied);
+    decoded.storage.reset();
+    decoded.mipmaps.clear();
+    if (!uploaded)
+        AXLOGW("Ktx2Loader: upload failed for {}", path);
+    return uploaded;
+}
+
+Texture2D* createTextureFromKtx2(std::string_view path)
+{
+    const auto start = LoadClock::now();
+    auto decoded     = Ktx2Loader::decode(path);
+    if (!decoded.isValid())
+        return nullptr;
+    const int width  = decoded.width;
+    const int height = decoded.height;
+    auto texture     = new Texture2D();
+    if (!uploadKtx2(texture, decoded, path))
+    {
+        texture->release();
+        return nullptr;
+    }
+    logKtx2Load("sync", width, height, millisecondsSince(start), path);
+    return texture;
+}
+
+bool reloadTextureWithKtx2(Texture2D* texture, std::string_view path)
+{
+    auto decoded = Ktx2Loader::decode(path);
+    return uploadKtx2(texture, decoded, path);
+}
+}
 
 std::string TextureCache::s_etc1AlphaFileSuffix = "@alpha";
 
@@ -69,6 +157,56 @@ void TextureCache::setETC1AlphaFileSuffix(std::string_view suffix)
 std::string TextureCache::getETC1AlphaFileSuffix()
 {
     return s_etc1AlphaFileSuffix;
+}
+
+void TextureCache::setKtx2Preferred(bool preferred)
+{
+    ktx2Preferred.store(preferred);
+}
+
+bool TextureCache::isKtx2Preferred()
+{
+    return ktx2Preferred.load();
+}
+
+void TextureCache::setLoadTimingLogEnabled(bool enabled)
+{
+    loadTimingLogEnabled.store(enabled);
+}
+
+std::string TextureCache::resolveKtx2Path(std::string_view originalPath)
+{
+    auto fileUtils               = FileUtils::getInstance();
+    std::string originalFullPath = existingFullPath(originalPath);
+    if (!originalFullPath.empty())
+    {
+        if (!isKtx2Preferred() || !deviceHasCompressedTranscodeTarget() || Ktx2Loader::isKtx2Path(originalFullPath))
+            return originalFullPath;
+        std::string sibling = ktx2SiblingOf(originalFullPath);
+        if (!sibling.empty() && fileUtils->isFileExistUsingIndex(sibling))
+            return sibling;
+        return originalFullPath;
+    }
+
+    std::string ktx2Path = ktx2SiblingOf(originalPath);
+    if (!ktx2Path.empty())
+    {
+        if (fileUtils->isAbsolutePath(ktx2Path))
+        {
+            if (fileUtils->isFileExistUsingIndex(ktx2Path))
+                return ktx2Path;
+        }
+        else if (std::string ktx2FullPath = fileUtils->fullPathForFilename(ktx2Path); !ktx2FullPath.empty())
+        {
+            return ktx2FullPath;
+        }
+    }
+    return std::string{originalPath};
+}
+
+void TextureCache::warmUpKtx2Transcoder()
+{
+    Ktx2Loader::warmUp();
 }
 
 TextureCache::TextureCache() : _loadingThread(nullptr), _needQuit(false), _asyncRefCount(0) {}
@@ -106,6 +244,12 @@ public:
     Image imageAlpha;
     backend::PixelFormat pixelFormat;
     bool loadSuccess;
+
+    bool isKtx2     = false;
+    bool completing = false;
+    std::string ktx2Path;
+    Ktx2Decoded decoded;
+    std::vector<std::pair<std::string, std::function<void(Texture2D*)>>> callbacks;
 };
 
 /**
@@ -198,12 +342,31 @@ void TextureCache::addImageAsync(std::string_view path,
         return;
     }
 
-    // check if file exists
     if (fullpath.empty() || !FileUtils::getInstance()->isFileExist(fullpath))
     {
-        if (callback)
-            callback(nullptr);
-        return;
+        fullpath = resolveKtx2Path(path);
+        if (!Ktx2Loader::isKtx2Path(fullpath) || fullpath == path)
+        {
+            if (callback)
+                callback(nullptr);
+            return;
+        }
+        auto ktx2It = _textures.find(fullpath);
+        if (ktx2It != _textures.end())
+        {
+            if (callback)
+                callback(ktx2It->second);
+            return;
+        }
+    }
+
+    for (auto&& pending : _asyncStructQueue)
+    {
+        if (!pending->completing && pending->filename == fullpath)
+        {
+            pending->callbacks.emplace_back(std::string{callbackKey}, callback);
+            return;
+        }
     }
 
     // lazy init
@@ -241,6 +404,11 @@ void TextureCache::unbindImageAsync(std::string_view callbackKey)
 
     for (auto&& asyncStruct : _asyncStructQueue)
     {
+        for (auto&& pending : asyncStruct->callbacks)
+        {
+            if (pending.first == callbackKey)
+                pending.second = nullptr;
+        }
         if (asyncStruct->callbackKey == callbackKey)
         {
             asyncStruct->callback = nullptr;
@@ -257,11 +425,13 @@ void TextureCache::unbindAllImageAsync()
     for (auto&& asyncStruct : _asyncStructQueue)
     {
         asyncStruct->callback = nullptr;
+        asyncStruct->callbacks.clear();
     }
 }
 
 void TextureCache::loadImage()
 {
+    warmUpKtx2Transcoder();
     AsyncStruct* asyncStruct = nullptr;
     while (!_needQuit)
     {
@@ -288,8 +458,23 @@ void TextureCache::loadImage()
         }
         ul.unlock();
 
-        // load image
-        asyncStruct->loadSuccess = asyncStruct->image.initWithImageFileThreadSafe(asyncStruct->filename);
+        const std::string sourcePath = resolveKtx2Path(asyncStruct->filename);
+        if (Ktx2Loader::isKtx2Path(sourcePath))
+        {
+            const auto decodeStart = LoadClock::now();
+            asyncStruct->decoded   = Ktx2Loader::decode(sourcePath);
+            if (asyncStruct->decoded.isValid())
+            {
+                logKtx2Load("async-decode", asyncStruct->decoded.width, asyncStruct->decoded.height,
+                            millisecondsSince(decodeStart), sourcePath);
+                asyncStruct->ktx2Path    = sourcePath;
+                asyncStruct->isKtx2      = true;
+                asyncStruct->loadSuccess = true;
+            }
+        }
+
+        if (!asyncStruct->isKtx2)
+            asyncStruct->loadSuccess = asyncStruct->image.initWithImageFileThreadSafe(asyncStruct->filename);
 
         // ETC1 ALPHA supports.
         if (asyncStruct->loadSuccess && asyncStruct->image.getFileType() == Image::Format::ETC1 &&
@@ -325,7 +510,7 @@ void TextureCache::addImageAsyncCallBack(float /*dt*/)
 
             // the asyncStruct's sequence order in _asyncStructQueue must equal to the order in _responseQueue
             AX_ASSERT(asyncStruct == _asyncStructQueue.front());
-            _asyncStructQueue.pop_front();
+            asyncStruct->completing = true;
         }
         _responseMutex.unlock();
 
@@ -339,6 +524,30 @@ void TextureCache::addImageAsyncCallBack(float /*dt*/)
         if (it != _textures.end())
         {
             texture = it->second;
+        }
+        else if (asyncStruct->isKtx2)
+        {
+            const auto uploadStart = LoadClock::now();
+            const int width        = asyncStruct->decoded.width;
+            const int height       = asyncStruct->decoded.height;
+            texture                = new Texture2D();
+            if (uploadKtx2(texture, asyncStruct->decoded, asyncStruct->ktx2Path))
+            {
+                logKtx2Load("async-upload", width, height, millisecondsSince(uploadStart), asyncStruct->ktx2Path);
+#if AX_ENABLE_CACHE_TEXTURE_DATA
+                VolatileTextureMgr::addImageTexture(texture, asyncStruct->ktx2Path);
+#endif
+                texture->_filePath = asyncStruct->filename;
+                _textures.emplace(asyncStruct->filename, texture);
+                parseNinePatchSourceFile(texture, asyncStruct->filename);
+                texture->retain();
+                texture->autorelease();
+            }
+            else
+            {
+                AX_SAFE_RELEASE_NULL(texture);
+                AXLOGW("axmol: failed to upload KTX2 in TextureCache::addImageAsync({})", asyncStruct->filename);
+            }
         }
         else
         {
@@ -374,11 +583,21 @@ void TextureCache::addImageAsyncCallBack(float /*dt*/)
             }
         }
 
+        asyncStruct->decoded = Ktx2Decoded();
+        AX_SAFE_RETAIN(texture);
         // call callback function
-        if (asyncStruct->callback)
+        if (auto primaryCallback = asyncStruct->callback)
         {
-            (asyncStruct->callback)(texture);
+            primaryCallback(texture);
         }
+        for (size_t i = 0; i < asyncStruct->callbacks.size(); ++i)
+        {
+            auto coalescedCallback = asyncStruct->callbacks[i].second;
+            if (coalescedCallback)
+                coalescedCallback(texture);
+        }
+        AX_SAFE_RELEASE(texture);
+        _asyncStructQueue.pop_front();
 
         // release the asyncStruct
         delete asyncStruct;
@@ -456,63 +675,76 @@ Texture2D* TextureCache::addImage(std::string_view path, PixelFormat format)
     // MUTEX:
     // Needed since addImageAsync calls this method from a different thread
 
-    std::string fullpath = FileUtils::getInstance()->fullPathForFilename(path);
-    if (fullpath.empty())
+    auto fileUtils       = FileUtils::getInstance();
+    std::string fullpath = fileUtils->fullPathForFilename(path);
+    if (!fullpath.empty())
     {
-        return nullptr;
+        auto it = _textures.find(fullpath);
+        if (it != _textures.end())
+            return it->second;
     }
-    auto it = _textures.find(fullpath);
-    if (it != _textures.end())
-        texture = it->second;
+    if (fullpath.empty() || (fileUtils->isAbsolutePath(path) && !fileUtils->isFileExist(fullpath)))
+        return addKtx2OnlyImage(path);
 
-    if (!texture)
+    const std::string sourcePath = resolveKtx2Path(fullpath);
+    if (Ktx2Loader::isKtx2Path(sourcePath))
     {
-        // all images are handled by UIImage except PVR extension that is handled by our own handler
-        do
+        texture = createTextureFromKtx2(sourcePath);
+        if (texture)
         {
-            image = new Image();
-
-            bool bRet = image->initWithImageFile(fullpath);
-            AX_BREAK_IF(!bRet);
-
-            texture = new Texture2D();
-
-            if (texture->initWithImage(image, format))
-            {
-#if AX_ENABLE_CACHE_TEXTURE_DATA
-                // cache the texture file name
-                VolatileTextureMgr::addImageTexture(texture, fullpath);
-#endif
-                // texture already retained, no need to re-retain it
-                _textures.emplace(fullpath, texture);
-#ifdef _AX_DEBUG
-                newlyLoaded = true;
-#endif
-
-                //-- ANDROID ETC1 ALPHA SUPPORTS.
-                std::string alphaFullPath{path};
-                alphaFullPath += s_etc1AlphaFileSuffix;
-                if (image->getFileType() == Image::Format::ETC1 && !s_etc1AlphaFileSuffix.empty() &&
-                    FileUtils::getInstance()->isFileExist(alphaFullPath))
-                {
-                    Image imageAlpha;
-                    if (imageAlpha.initWithImageFile(alphaFullPath))
-                    {
-                        texture->updateWithImage(&imageAlpha, format, 1);
-                    }
-                }
-
-                // parse 9-patch info
-                this->parseNinePatchImage(image, texture, path);
-            }
-            else
-            {
-                AXLOGW("Couldn't create texture for file:{} in TextureCache", path);
-                AX_SAFE_RELEASE(texture);
-                texture = nullptr;
-            }
-        } while (0);
+            cacheFileTexture(fullpath, texture, sourcePath);
+            parseNinePatchSourceFile(texture, fullpath);
+            return texture;
+        }
+        if (Ktx2Loader::isKtx2Path(fullpath))
+            return nullptr;
     }
+
+    // all images are handled by UIImage except PVR extension that is handled by our own handler
+    do
+    {
+        image = new Image();
+
+        bool bRet = image->initWithImageFile(fullpath);
+        AX_BREAK_IF(!bRet);
+
+        texture = new Texture2D();
+
+        if (texture->initWithImage(image, format))
+        {
+#if AX_ENABLE_CACHE_TEXTURE_DATA
+            // cache the texture file name
+            VolatileTextureMgr::addImageTexture(texture, fullpath);
+#endif
+            // texture already retained, no need to re-retain it
+            _textures.emplace(fullpath, texture);
+#ifdef _AX_DEBUG
+            newlyLoaded = true;
+#endif
+
+            //-- ANDROID ETC1 ALPHA SUPPORTS.
+            std::string alphaFullPath{path};
+            alphaFullPath += s_etc1AlphaFileSuffix;
+            if (image->getFileType() == Image::Format::ETC1 && !s_etc1AlphaFileSuffix.empty() &&
+                FileUtils::getInstance()->isFileExist(alphaFullPath))
+            {
+                Image imageAlpha;
+                if (imageAlpha.initWithImageFile(alphaFullPath))
+                {
+                    texture->updateWithImage(&imageAlpha, format, 1);
+                }
+            }
+
+            // parse 9-patch info
+            this->parseNinePatchImage(image, texture, path);
+        }
+        else
+        {
+            AXLOGW("Couldn't create texture for file:{} in TextureCache", path);
+            AX_SAFE_RELEASE(texture);
+            texture = nullptr;
+        }
+    } while (0);
 
     AX_SAFE_RELEASE(image);
     
@@ -528,6 +760,33 @@ Texture2D* TextureCache::addImage(std::string_view path, PixelFormat format)
     return texture;
 }
 
+Texture2D* TextureCache::addKtx2OnlyImage(std::string_view path)
+{
+    const std::string ktx2Path = resolveKtx2Path(path);
+    if (!Ktx2Loader::isKtx2Path(ktx2Path) || ktx2Path == path)
+        return nullptr;
+    auto it = _textures.find(ktx2Path);
+    if (it != _textures.end())
+        return it->second;
+    auto texture = createTextureFromKtx2(ktx2Path);
+    if (texture)
+        cacheFileTexture(ktx2Path, texture, ktx2Path);
+    return texture;
+}
+
+void TextureCache::cacheFileTexture(const std::string& key, Texture2D* texture, [[maybe_unused]] std::string_view sourcePath)
+{
+    texture->_filePath = key;
+#if AX_ENABLE_CACHE_TEXTURE_DATA
+    VolatileTextureMgr::addImageTexture(texture, sourcePath);
+#endif
+    _textures.emplace(key, texture);
+#ifdef _AX_DEBUG
+    if (onSyncImageLoad && (!_loadingThread || std::this_thread::get_id() != _loadingThread->get_id()))
+        onSyncImageLoad(key);
+#endif
+}
+
 void TextureCache::parseNinePatchImage(ax::Image* image, ax::Texture2D* texture, std::string_view path)
 {
     if (NinePatchImageParser::isNinePatchImage(path))
@@ -536,6 +795,15 @@ void TextureCache::parseNinePatchImage(ax::Image* image, ax::Texture2D* texture,
         NinePatchImageParser parser(image, frameRect, false);
         texture->addSpriteFrameCapInset(nullptr, parser.parseCapInset());
     }
+}
+
+void TextureCache::parseNinePatchSourceFile(Texture2D* texture, std::string_view path)
+{
+    if (!NinePatchImageParser::isNinePatchImage(path) || !FileUtils::getInstance()->isFileExist(path))
+        return;
+    Image image;
+    if (image.initWithImageFile(path) && NinePatchImageParser::canParse(&image))
+        parseNinePatchImage(&image, texture, path);
 }
 
 Texture2D* TextureCache::addImage(Image* image, std::string_view key)
@@ -639,7 +907,9 @@ bool TextureCache::reloadTexture(std::string_view fileName)
     std::string fullpath = FileUtils::getInstance()->fullPathForFilename(fileName);
     if (fullpath.empty())
     {
-        return false;
+        fullpath = resolveKtx2Path(fileName);
+        if (!Ktx2Loader::isKtx2Path(fullpath) || fullpath == fileName)
+            return false;
     }
 
     auto it = _textures.find(fullpath);
@@ -653,6 +923,10 @@ bool TextureCache::reloadTexture(std::string_view fileName)
     {
         texture = this->addImage(fullpath);
         ret     = (texture != nullptr);
+    }
+    else if (const std::string sourcePath = resolveKtx2Path(fullpath); Ktx2Loader::isKtx2Path(sourcePath))
+    {
+        ret = reloadTextureWithKtx2(texture, sourcePath);
     }
     else
     {
@@ -730,6 +1004,13 @@ void TextureCache::removeTextureForKey(std::string_view textureKeyName)
         it       = _textures.find(key);
     }
 
+    if (it == _textures.end())
+    {
+        const std::string sibling = ktx2SiblingOf(textureKeyName);
+        if (!sibling.empty() && sibling != textureKeyName)
+            it = _textures.find(FileUtils::getInstance()->fullPathForFilename(sibling));
+    }
+
     if (it != _textures.end())
     {
         it->second->release();
@@ -745,6 +1026,13 @@ Texture2D* TextureCache::getTextureForKey(std::string_view textureKeyName) const
     {
         auto key = FileUtils::getInstance()->fullPathForFilename(textureKeyName);
         it       = _textures.find(key);
+    }
+
+    if (it == _textures.end())
+    {
+        const std::string sibling = ktx2SiblingOf(textureKeyName);
+        if (!sibling.empty() && sibling != textureKeyName)
+            it = _textures.find(FileUtils::getInstance()->fullPathForFilename(sibling));
     }
 
     if (it != _textures.end())
@@ -795,8 +1083,7 @@ std::string TextureCache::getCachedTextureInfo() const
     {
         Texture2D* tex   = texture.second;
         unsigned int bpp = tex->getBitsPerPixelForFormat();
-        // Each texture takes up width * height * bytesPerPixel bytes.
-        auto bytes = tex->getPixelsWide() * tex->getPixelsHigh() * bpp / 8;
+        auto bytes       = tex->getDataSize();
         totalBytes += bytes;
         count++;
         auto msg = fmt::format_to_z(tmp, "\"{}\" rc={} id={} {} x {} @ {} bpp => {} KB\n", texture.first,
@@ -811,6 +1098,53 @@ std::string TextureCache::getCachedTextureInfo() const
     ret += msg;
 
     return ret;
+}
+
+std::string TextureCache::getCachedTextureSummary(int topCount) const
+{
+    auto categoryOf = [](std::string_view key) -> std::string_view {
+        if (key.find("/download/image/") != std::string_view::npos)
+            return "image";
+        if (key.find("/download/ccb/") != std::string_view::npos)
+            return "ccb";
+        if (key.find("/download/") != std::string_view::npos)
+            return "download-etc";
+        if (key.find(".app/") != std::string_view::npos || key.starts_with("assets/"))
+            return "bundle";
+        return "etc";
+    };
+    struct Bucket
+    {
+        int count    = 0;
+        size_t bytes = 0;
+    };
+    constexpr double bytesPerMegabyte = 1024.0 * 1024.0;
+    std::map<std::string, Bucket> buckets;
+    std::vector<std::pair<size_t, std::string>> largest;
+    size_t totalBytes = 0;
+    for (auto&& texture : _textures)
+    {
+        Texture2D* tex          = texture.second;
+        const size_t bytes      = tex->getDataSize();
+        const char* formatName  = tex->getStringForFormat();
+        std::string_view format = formatName ? formatName : "UNKNOWN";
+        totalBytes += bytes;
+        auto& bucket = buckets[fmt::format("{:<12} {:<10}", categoryOf(texture.first), format)];
+        bucket.count++;
+        bucket.bytes += bytes;
+        largest.emplace_back(bytes, fmt::format("{:<10} {:>4}x{:<4} {:7.2f}MB {}", format, tex->getPixelsWide(),
+                                                tex->getPixelsHigh(), bytes / bytesPerMegabyte, texture.first));
+    }
+
+    std::string result = fmt::format("[TexMem] total {} textures, {:.2f}MB\n", _textures.size(), totalBytes / bytesPerMegabyte);
+    for (auto&& bucket : buckets)
+        result += fmt::format("[TexMem]   {} {:>4}  {:8.2f}MB\n", bucket.first, bucket.second.count,
+                              bucket.second.bytes / bytesPerMegabyte);
+
+    std::sort(largest.begin(), largest.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    for (int i = 0; i < topCount && i < static_cast<int>(largest.size()); ++i)
+        result += fmt::format("[TexMem]   top {}\n", largest[i].second);
+    return result;
 }
 
 void TextureCache::renameTextureWithKey(std::string_view srcName, std::string_view dstName)
@@ -973,6 +1307,11 @@ void VolatileTextureMgr::reloadAllTextures()
         {
         case VolatileTexture::kImageFile:
         {
+            if (Ktx2Loader::isKtx2Path(vt->_fileName))
+            {
+                reloadTextureWithKtx2(vt->_texture, vt->_fileName);
+                break;
+            }
             reloadTexture(vt->_texture, vt->_fileName, vt->_pixelFormat);
 
             // etc1 support check whether alpha texture exists & load it
