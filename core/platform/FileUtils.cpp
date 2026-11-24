@@ -35,6 +35,7 @@ THE SOFTWARE.
 #include "base/Macros.h"
 #include "base/Director.h"
 #include "base/TarBundleUtils.h"
+#include "base/GBPackUtils.h"
 #include "platform/SAXParser.h"
 #include "platform/FileStream.h"
 
@@ -494,6 +495,20 @@ FileUtils::~FileUtils()
     }
 }
 
+void FileUtils::setGBPackPaths(const std::vector<std::string>& paths)
+{
+    const auto previous = std::atomic_load(&_gbpacks);
+    for (auto it = _fullPathCache.begin(); it != _fullPathCache.end();)
+    {
+        if (it->second.empty() || (previous && previous->contains(it->second))) it = _fullPathCache.erase(it);
+        else ++it;
+    }
+    auto next = std::make_shared<GBPackCache>();
+    next->load(*this, paths);
+    // 비동기 이미지 읽기가 끝날 때까지 이전 인덱스·파일 핸들 유지
+    std::atomic_store(&_gbpacks, std::shared_ptr<const GBPackCache>(std::move(next)));
+}
+
 bool FileUtils::writeStringToFile(std::string_view dataStr, std::string_view fullPath) const
 {
     return FileUtils::writeBinaryToFile(dataStr.data(), dataStr.size(), fullPath);
@@ -595,6 +610,12 @@ FileUtils::Status FileUtils::getContents(std::string_view filename, ResizableBuf
     auto fileUtils = FileUtils::getInstance();
 
     const auto fullPath = fileUtils->fullPathForFilename(filename);
+    if (fullPath.find(".gbpack/") != std::string::npos)
+    {
+        const auto packs = std::atomic_load(&_gbpacks);
+        if (packs && packs->contains(fullPath))
+            return packs->read(fullPath, buffer) ? Status::OK : Status::ReadFailed;
+    }
     /// if ".crp"
     if (TarBundleFile::isCRPPath(fullPath))
     {
@@ -701,6 +722,18 @@ std::string FileUtils::fullPathForFilename(std::string_view filename) const
     if (cacheIter != _fullPathCache.end())
     {
         return cacheIter->second;
+    }
+
+    // pack 파일도 일반 리소스와 같은 캐시·검색 경로로 선택. 내부 이미지는 해당 pack에서만 조회
+    const auto packEnd = filename.find(".gbpack/");
+    if (packEnd != filename.npos)
+    {
+        const auto packPath = fullPathForFilename(filename.substr(0, packEnd + 7));
+        const auto packs = std::atomic_load(&_gbpacks);
+        const auto result = !packPath.empty() && packs
+            ? packs->resolve(packPath + std::string{filename.substr(packEnd + 7)}) : std::string{};
+        _fullPathCache.emplace(filename, result);
+        return result;
     }
 
     std::string fullpath;
@@ -922,6 +955,11 @@ std::string FileUtils::getFullPathForFilenameWithinDirectory(std::string_view di
 
 bool FileUtils::isFileExist(std::string_view filename) const
 {
+    if (filename.find(".gbpack/") != filename.npos)
+    {
+        const auto packs = std::atomic_load(&_gbpacks);
+        return packs && packs->contains(fullPathForFilename(filename));
+    }
     if (isAbsolutePath(filename))
     {
         return isFileExistInternal(filename);

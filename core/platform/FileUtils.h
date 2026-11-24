@@ -53,6 +53,7 @@ namespace ax
  */
     
 class TarBundleFile;//cookie run ovenbreak resource pack : crp
+class GBPackCache;
 
 class ResizableBuffer
 {
@@ -138,6 +139,9 @@ public:
      *  Purges full path caches.
      */
     virtual void purgeCachedEntries();
+
+    // 우선순위 순으로 등록. 일반 파일 조회 실패 시에만 사용, 갱신은 메인 스레드에서 처리
+    void setGBPackPaths(const std::vector<std::string>& paths);
 
     /**
      *  Gets string from a file.
@@ -911,6 +915,7 @@ protected:
     }
     
     TarBundleFile* _crp = nullptr;
+    std::shared_ptr<const GBPackCache> _gbpacks;
 };
 
 // end of support group

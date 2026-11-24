@@ -82,6 +82,7 @@ set(_AX_BASE_HEADER
   base/JsonWriter.h
   base/JobSystem.h
   base/TarBundleUtils.h
+  base/GBPackUtils.h
 )
 
 set(_AX_BASE_SRC
@@ -138,6 +139,7 @@ set(_AX_BASE_SRC
   base/s3tc.cpp
   base/astc.cpp
   base/TarBundleUtils.cpp
+  base/GBPackUtils.cpp
   ${_AX_BASE_SPECIFIC_SRC}
 )
 
