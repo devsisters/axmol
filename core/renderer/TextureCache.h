@@ -70,7 +70,6 @@ public:
 
     static void setKtx2Preferred(bool preferred);
     static bool isKtx2Preferred();
-    static void setLoadTimingLogEnabled(bool enabled);
     static std::string resolveKtx2Path(std::string_view originalPath);
     static void warmUpKtx2Transcoder();
 
@@ -202,8 +201,6 @@ public:
      * @since v1.0
      */
     std::string getCachedTextureInfo() const;
-
-    std::string getCachedTextureSummary(int topCount) const;
 
     // Wait for texture cache to quit before destroy instance.
     /**Called by director, please do not called outside.*/

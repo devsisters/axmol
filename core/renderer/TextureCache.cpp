@@ -35,8 +35,6 @@ THE SOFTWARE.
 #include <list>
 #include <algorithm>
 #include <atomic>
-#include <chrono>
-#include <map>
 #include <vector>
 
 #include "renderer/Texture2D.h"
@@ -63,20 +61,6 @@ namespace ax
 namespace
 {
 std::atomic<bool> ktx2Preferred{true};
-std::atomic<bool> loadTimingLogEnabled{false};
-
-using LoadClock = std::chrono::steady_clock;
-
-float millisecondsSince(LoadClock::time_point start)
-{
-    return std::chrono::duration<float, std::milli>(LoadClock::now() - start).count();
-}
-
-void logKtx2Load(std::string_view stage, int width, int height, float milliseconds, std::string_view path)
-{
-    if (loadTimingLogEnabled.load())
-        AXLOGI("[TexLoad] ktx2 {} {}x{} {:.1f} ms {}", stage, width, height, milliseconds, path);
-}
 
 bool deviceHasCompressedTranscodeTarget()
 {
@@ -118,19 +102,15 @@ bool uploadKtx2(Texture2D* texture, Ktx2Decoded& decoded, std::string_view path)
 
 Texture2D* createTextureFromKtx2(std::string_view path)
 {
-    const auto start = LoadClock::now();
-    auto decoded     = Ktx2Loader::decode(path);
+    auto decoded = Ktx2Loader::decode(path);
     if (!decoded.isValid())
         return nullptr;
-    const int width  = decoded.width;
-    const int height = decoded.height;
-    auto texture     = new Texture2D();
+    auto texture = new Texture2D();
     if (!uploadKtx2(texture, decoded, path))
     {
         texture->release();
         return nullptr;
     }
-    logKtx2Load("sync", width, height, millisecondsSince(start), path);
     return texture;
 }
 
@@ -167,11 +147,6 @@ void TextureCache::setKtx2Preferred(bool preferred)
 bool TextureCache::isKtx2Preferred()
 {
     return ktx2Preferred.load();
-}
-
-void TextureCache::setLoadTimingLogEnabled(bool enabled)
-{
-    loadTimingLogEnabled.store(enabled);
 }
 
 std::string TextureCache::resolveKtx2Path(std::string_view originalPath)
@@ -461,12 +436,9 @@ void TextureCache::loadImage()
         const std::string sourcePath = resolveKtx2Path(asyncStruct->filename);
         if (Ktx2Loader::isKtx2Path(sourcePath))
         {
-            const auto decodeStart = LoadClock::now();
-            asyncStruct->decoded   = Ktx2Loader::decode(sourcePath);
+            asyncStruct->decoded = Ktx2Loader::decode(sourcePath);
             if (asyncStruct->decoded.isValid())
             {
-                logKtx2Load("async-decode", asyncStruct->decoded.width, asyncStruct->decoded.height,
-                            millisecondsSince(decodeStart), sourcePath);
                 asyncStruct->ktx2Path    = sourcePath;
                 asyncStruct->isKtx2      = true;
                 asyncStruct->loadSuccess = true;
@@ -527,13 +499,9 @@ void TextureCache::addImageAsyncCallBack(float /*dt*/)
         }
         else if (asyncStruct->isKtx2)
         {
-            const auto uploadStart = LoadClock::now();
-            const int width        = asyncStruct->decoded.width;
-            const int height       = asyncStruct->decoded.height;
-            texture                = new Texture2D();
+            texture = new Texture2D();
             if (uploadKtx2(texture, asyncStruct->decoded, asyncStruct->ktx2Path))
             {
-                logKtx2Load("async-upload", width, height, millisecondsSince(uploadStart), asyncStruct->ktx2Path);
 #if AX_ENABLE_CACHE_TEXTURE_DATA
                 VolatileTextureMgr::addImageTexture(texture, asyncStruct->ktx2Path);
 #endif
@@ -1098,53 +1066,6 @@ std::string TextureCache::getCachedTextureInfo() const
     ret += msg;
 
     return ret;
-}
-
-std::string TextureCache::getCachedTextureSummary(int topCount) const
-{
-    auto categoryOf = [](std::string_view key) -> std::string_view {
-        if (key.find("/download/image/") != std::string_view::npos)
-            return "image";
-        if (key.find("/download/ccb/") != std::string_view::npos)
-            return "ccb";
-        if (key.find("/download/") != std::string_view::npos)
-            return "download-etc";
-        if (key.find(".app/") != std::string_view::npos || key.starts_with("assets/"))
-            return "bundle";
-        return "etc";
-    };
-    struct Bucket
-    {
-        int count    = 0;
-        size_t bytes = 0;
-    };
-    constexpr double bytesPerMegabyte = 1024.0 * 1024.0;
-    std::map<std::string, Bucket> buckets;
-    std::vector<std::pair<size_t, std::string>> largest;
-    size_t totalBytes = 0;
-    for (auto&& texture : _textures)
-    {
-        Texture2D* tex          = texture.second;
-        const size_t bytes      = tex->getDataSize();
-        const char* formatName  = tex->getStringForFormat();
-        std::string_view format = formatName ? formatName : "UNKNOWN";
-        totalBytes += bytes;
-        auto& bucket = buckets[fmt::format("{:<12} {:<10}", categoryOf(texture.first), format)];
-        bucket.count++;
-        bucket.bytes += bytes;
-        largest.emplace_back(bytes, fmt::format("{:<10} {:>4}x{:<4} {:7.2f}MB {}", format, tex->getPixelsWide(),
-                                                tex->getPixelsHigh(), bytes / bytesPerMegabyte, texture.first));
-    }
-
-    std::string result = fmt::format("[TexMem] total {} textures, {:.2f}MB\n", _textures.size(), totalBytes / bytesPerMegabyte);
-    for (auto&& bucket : buckets)
-        result += fmt::format("[TexMem]   {} {:>4}  {:8.2f}MB\n", bucket.first, bucket.second.count,
-                              bucket.second.bytes / bytesPerMegabyte);
-
-    std::sort(largest.begin(), largest.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
-    for (int i = 0; i < topCount && i < static_cast<int>(largest.size()); ++i)
-        result += fmt::format("[TexMem]   top {}\n", largest[i].second);
-    return result;
 }
 
 void TextureCache::renameTextureWithKey(std::string_view srcName, std::string_view dstName)
