@@ -33,7 +33,6 @@ THE SOFTWARE.
 #include <stack>
 #include <cctype>
 #include <list>
-#include <algorithm>
 #include <atomic>
 #include <vector>
 
@@ -60,7 +59,7 @@ namespace ax
 
 namespace
 {
-std::atomic<bool> ktx2Preferred{true};
+std::atomic<bool> ktx2Preferred{false};
 
 bool deviceHasCompressedTranscodeTarget()
 {
