@@ -36,6 +36,7 @@ THE SOFTWARE.
 #include "base/Utils.h"
 #include "renderer/backend/metal/DriverMTL.h"
 #import <CoreVideo/CoreVideo.h>
+#include <mach/mach_time.h>
 #import <QuartzCore/CAMetalLayer.h>
 #include <atomic>
 
@@ -60,24 +61,28 @@ Application::~Application()
 // VSync 가 켜져 있으면 창이 있는 디스플레이의 vblank 신호(CVDisplayLink)를 받아 N = round(animationInterval / 주사 주기) 번째
 // vblank 마다 프레임을 시작한다 (120Hz → 2 = 60fps, 60·75Hz → 1). Metal present 는 CPU 를 블로킹하지 않아 sleep 이나
 // 드로어블 대기로는 vblank 위상에 고정되지 않으므로 루프 시작 시점을 vblank 에 묶는다. VSync 꺼짐·링크 실패 시 기존 sleep 페이싱
+// 메인 스레드는 CVDisplayLink 스레드(QoS 없음)의 신호를 기다리지 않는다 (우선순위 역전). 콜백이 남긴 vblank 시각에서 목표 vblank 시각을 구해 그때까지 잔다
 struct MacDisplayLinkPacer
 {
     CVDisplayLinkRef displayLink    = nullptr;
     CGDirectDisplayID displayId     = kCGNullDirectDisplay;
-    dispatch_semaphore_t vblankSignal = nullptr;
+    // 마지막 vblank 의 호스트 시각(mach_absolute_time 단위)과 지금까지의 vblank 수. 콜백 스레드가 쓴다
+    std::atomic<uint64_t> lastVblankHostTime{0};
     std::atomic<int64_t> vblankCount{0};
     int64_t frameStartVblank        = 0;
     int vblanksPerFrame             = 1;
+    double refreshPeriod            = 0.0;
 };
 
 static MacDisplayLinkPacer macDisplayLinkPacer;
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-static CVReturn onMacDisplayLinkVblank(CVDisplayLinkRef, const CVTimeStamp*, const CVTimeStamp*, CVOptionFlags, CVOptionFlags*, void*)
+static CVReturn onMacDisplayLinkVblank(CVDisplayLinkRef, const CVTimeStamp* now, const CVTimeStamp*, CVOptionFlags, CVOptionFlags*, void*)
 {
+    // 시각을 먼저 쓰고 수를 올린다 (읽는 쪽은 수가 바뀌지 않은 동안의 시각만 쓴다)
+    macDisplayLinkPacer.lastVblankHostTime.store(now->hostTime);
     macDisplayLinkPacer.vblankCount.fetch_add(1);
-    dispatch_semaphore_signal(macDisplayLinkPacer.vblankSignal);
     return kCVReturnSuccess;
 }
 
@@ -97,8 +102,6 @@ static bool prepareMacDisplayLinkPacing(RenderView* renderView, std::chrono::nan
             pacer.displayLink = nullptr;
             return false;
         }
-        if (!pacer.vblankSignal)
-            pacer.vblankSignal = dispatch_semaphore_create(0);
         CVDisplayLinkSetOutputCallback(pacer.displayLink, onMacDisplayLinkVblank, nullptr);
         CVDisplayLinkStart(pacer.displayLink);
         pacer.displayId = displayId;
@@ -120,6 +123,7 @@ static bool prepareMacDisplayLinkPacing(RenderView* renderView, std::chrono::nan
     if (refreshPeriod <= 0)
         return false;
 
+    pacer.refreshPeriod   = refreshPeriod;
     pacer.vblanksPerFrame = std::max(1, static_cast<int>(std::lround(animationInterval.count() / 1e9 / refreshPeriod)));
     return true;
 }
@@ -136,19 +140,50 @@ static void stopMacDisplayLinkPacing()
 }
 #pragma clang diagnostic pop
 
+static uint64_t macNanosecondsToHostTime(double nanoseconds)
+{
+    static mach_timebase_info_data_t timebase = [] {
+        mach_timebase_info_data_t info{};
+        mach_timebase_info(&info);
+        return info;
+    }();
+    return static_cast<uint64_t>(nanoseconds * timebase.denom / timebase.numer);
+}
+
 // 직전 프레임 시작 vblank 로부터 vblanksPerFrame 번째 vblank 까지 대기. 이미 지났으면 바로 진행.
-// vblank 신호가 끊기면(디스플레이 절전 등) animationInterval 2배 뒤 진행해 루프가 멈추지 않게 한다
+// 마지막 vblank 시각 + 남은 vblank 수 × 주사 주기까지 잔다. vblank 신호가 끊기면(디스플레이 절전 등) 최대 animationInterval 2배만 자서 루프가 멈추지 않게 한다
 static void waitMacDisplayLinkVblank(std::chrono::nanoseconds animationInterval)
 {
     auto& pacer          = macDisplayLinkPacer;
     const int64_t target = pacer.frameStartVblank + pacer.vblanksPerFrame;
-    const auto deadline  = dispatch_time(DISPATCH_TIME_NOW, animationInterval.count() * 2);
-    while (pacer.vblankCount.load() < target)
+    // 마지막 vblank 의 수와 시각을 함께 읽는다 (읽는 사이 새 vblank 가 오면 다시)
+    int64_t count     = 0;
+    uint64_t hostTime = 0;
+    do
     {
-        if (dispatch_semaphore_wait(pacer.vblankSignal, deadline) != 0)
-            break;
+        count    = pacer.vblankCount.load();
+        hostTime = pacer.lastVblankHostTime.load();
+    } while (count != pacer.vblankCount.load());
+    if (count >= target)
+    {
+        pacer.frameStartVblank = count;
+        return;
     }
-    pacer.frameStartVblank = pacer.vblankCount.load();
+    const uint64_t nowTime   = mach_absolute_time();
+    const uint64_t limitSpan = macNanosecondsToHostTime(static_cast<double>(animationInterval.count()) * 2.0);
+    // vblank 신호가 끊겼거나 아직 오지 않았다: 한 프레임만큼 자고 기준 vblank 를 지금 수로 되돌린다 (신호가 돌아오면 다시 vblank 에 맞춘다)
+    if (nowTime > hostTime + limitSpan)
+    {
+        mach_wait_until(nowTime + macNanosecondsToHostTime(static_cast<double>(animationInterval.count())));
+        pacer.frameStartVblank = pacer.vblankCount.load();
+        return;
+    }
+    const uint64_t wakeTime  = hostTime + macNanosecondsToHostTime(pacer.refreshPeriod * 1e9 * static_cast<double>(target - count));
+    const uint64_t limitTime = nowTime + limitSpan;
+    if (wakeTime > nowTime)
+        mach_wait_until(std::min(wakeTime, limitTime));
+    // 깨어난 순간 그 vblank 의 콜백이 아직 오지 않았을 수 있어 목표 vblank 를 기준으로 삼는다
+    pacer.frameStartVblank = std::max(target, pacer.vblankCount.load());
 }
 
 int Application::run()
